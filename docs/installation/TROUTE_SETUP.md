@@ -1,67 +1,37 @@
 # t-route Setup for NextGenDA
 
-NextGenDA uses a specific t-route source revision for routing and routing
-data assimilation.
+NextGenDA uses the exact pinned t-route source revision:
 
-## Certified source
+- Repository: `https://github.com/CIROH-UA/t-route.git`
+- Commit: `dd43a7d218274c526306041369f4e5e8e76a2cb1`
 
-Repository:
+## Host requirement
 
-`https://github.com/CIROH-UA/t-route.git`
+The exact certified checkout must live on a Linux filesystem.
 
-Commit:
+Windows users must run NextGenDA through WSL2. The pinned commit contains
+Linux-valid test-data filenames with `:` characters. Native Windows NTFS cannot
+represent those filenames, so Git-for-Windows cannot create the exact checkout.
 
-`dd43a7d218274c526306041369f4e5e8e76a2cb1`
-
-Do not substitute a newer t-route revision unless it has been separately
-validated against NextGenDA.
+Do not disable Git NTFS protections, rename upstream files, or change the pinned
+commit. Those approaches would violate the certified-source contract.
 
 ## Automatic installation
 
-From the NextGenDA repository root:
+From Linux/WSL2:
 
 ```bash
 python scripts/setup_troute.py
 ```
 
-By default this installs the exact certified checkout under:
+Default location:
 
 ```text
 ~/.local/share/nextgenda/t-route/dd43a7d218274c526306041369f4e5e8e76a2cb1
 ```
 
-The script verifies:
+The script verifies the supported host, repository, exact commit, clean working
+tree, and expected source layout.
 
-1. the Git repository,
-2. the exact commit,
-3. a clean working tree,
-4. the expected t-route source layout.
-
-It does not compile t-route on the host.
-
-The certified NextGenDA runtime container already provides the compatible
-compiled runtime environment.
-
-## Custom installation path
-
-You can instead use:
-
-```bash
-python scripts/setup_troute.py --destination /your/path/t-route
-```
-
-or set:
-
-```bash
-export NEXTGENDA_T_ROUTE_SOURCE=/your/path/t-route
-python scripts/setup_troute.py
-```
-
-## Why the source checkout is still required
-
-The production orchestration mounts the pinned t-route source tree into
-the runtime container and uses its Python routing modules through the
-certified container environment.
-
-Therefore a source checkout is required, but a separate host compilation
-is not required for the initial certified SAC-SMA release.
+The source is mounted into the certified runtime container; no host compilation
+is required.

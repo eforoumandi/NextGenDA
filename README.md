@@ -20,13 +20,20 @@ The current SAC-SMA workflow combines:
 The current production-science release is certified for:
 
 - Linux AMD64, or
-- Windows 10/11 through WSL2 with Docker Desktop.
+- Windows 10/11 **through WSL2** with Docker Desktop.
 
-The bootstrap scripts are shell-aware when invoked from native Windows
-PowerShell, but native-Windows execution of the complete scientific workflow is
-not yet claimed as a certified production configuration.
+### Important Windows requirement
+
+Do **not** run the NextGenDA production bootstrap from native Windows
+PowerShell or Command Prompt.
+
+The exact certified t-route revision contains Linux-valid filenames with
+characters such as `:` that cannot be represented on Windows NTFS. NextGenDA
+therefore requires an Ubuntu/WSL2 terminal on Windows.
 
 ## Quick start — Linux or Windows WSL2
+
+Run these commands from a Linux shell or an Ubuntu/WSL2 terminal:
 
 ```bash
 git clone https://github.com/eforoumandi/NextGenDA.git
@@ -40,22 +47,24 @@ python scripts/bootstrap_nextgenda.py
 nextgenda assimilate
 ```
 
+A Conda environment created by Windows Anaconda/Miniconda cannot be reused as
+the Linux Conda environment inside WSL2.
+
 ## What the bootstrap does
 
 `bootstrap_nextgenda.py` automatically:
 
+- verifies that it is running on a supported Linux/WSL2 host;
 - checks out the exact pinned NGIAB preparation backends;
 - verifies and pulls the immutable certified GHCR runtime;
 - installs the exact pinned t-route source;
 - verifies all upstream Git identities and clean worktrees;
-- writes optional Bash and PowerShell runtime environment files; and
+- writes the local runtime environment configuration; and
 - runs the complete prerequisite checker.
 
-No manual editing of local source paths is required for the standard workflow.
+No manual editing of local source paths is required.
 
-## Existing clone
-
-To update an earlier clone:
+## Existing Linux/WSL2 clone
 
 ```bash
 git pull
@@ -70,44 +79,13 @@ Then:
 nextgenda assimilate
 ```
 
-## PowerShell bootstrap
-
-The external dependency bootstrap can also be invoked from PowerShell:
-
-```powershell
-git pull
-conda env update -f environment.yml --prune
-conda activate nextgenda
-python scripts/bootstrap_nextgenda.py
-```
-
-It writes `.nextgenda-runtime.ps1` for users who want explicit environment
-overrides. Standard portable defaults do not require sourcing that file.
-
-For scientifically certified production execution on Windows, continue the
-actual NextGenDA workflow inside WSL2.
-
 ## Documentation
 
-For installation, gauge selection, uncertainty controls, outputs,
-reproducibility, and troubleshooting, see:
+See:
 
-[`docs/user-guide/BEGINNER_GUIDE.md`](docs/user-guide/BEGINNER_GUIDE.md)
-
-For the minimal installation workflow, see:
-
-[`docs/installation/BEGINNER_INSTALLATION.md`](docs/installation/BEGINNER_INSTALLATION.md)
-
-## Runtime provenance
-
-The SAC-SMA runtime is pulled from the immutable public reference recorded in
-`runtime/runtime-lock.json`. The registry manifest digest is verified separately
-from Docker's local image/config ID; these are intentionally not treated as the
-same identifier.
-
-See
-[`docs/installation/RUNTIME_PROVENANCE.md`](docs/installation/RUNTIME_PROVENANCE.md)
-for the complete runtime and upstream pin contract.
+- [`docs/user-guide/BEGINNER_GUIDE.md`](docs/user-guide/BEGINNER_GUIDE.md)
+- [`docs/installation/BEGINNER_INSTALLATION.md`](docs/installation/BEGINNER_INSTALLATION.md)
+- [`docs/installation/RUNTIME_PROVENANCE.md`](docs/installation/RUNTIME_PROVENANCE.md)
 
 ## License
 

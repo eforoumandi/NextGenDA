@@ -20,6 +20,13 @@ NextGenDA uses an immutable certified runtime container and an exact pinned
 t-route source revision. Users should not rebuild t-route, ngen, or SAC-SMA
 for the certified beginner workflow.
 
+### Windows requirement
+
+Windows users must run the workflow from an Ubuntu/WSL2 terminal, not native
+PowerShell. The exact certified t-route commit contains Linux-valid filenames
+with `:` characters that cannot be represented by native Windows NTFS. The
+bootstrap rejects native Windows before any external dependency is downloaded.
+
 ## 2. Clone NextGenDA
 
 ```bash

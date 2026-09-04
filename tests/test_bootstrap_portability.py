@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from nextgenda.runtime import assimilation_run
 
 
@@ -426,3 +428,70 @@ def test_beginner_docs_use_one_command_bootstrap():
             "python scripts/bootstrap_nextgenda.py"
             in text
         )
+
+def test_bootstrap_rejects_native_windows():
+    bootstrap = load_script("bootstrap_nextgenda.py")
+
+    with pytest.raises(SystemExit) as exc_info:
+        bootstrap._require_supported_host(os_name="nt")
+
+    message = str(exc_info.value)
+    assert "WSL2" in message
+    assert "NTFS" in message
+
+    bootstrap._require_supported_host(os_name="posix")
+
+
+def test_setup_troute_rejects_native_windows():
+    setup_troute = load_script("setup_troute.py")
+
+    with pytest.raises(SystemExit) as exc_info:
+        setup_troute._require_supported_host(os_name="nt")
+
+    message = str(exc_info.value)
+    assert "WSL2" in message
+    assert "NTFS" in message
+
+    setup_troute._require_supported_host(os_name="posix")
+
+
+def test_docs_require_wsl2_for_windows():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    install = (
+        ROOT / "docs" / "installation" / "BEGINNER_INSTALLATION.md"
+    ).read_text(encoding="utf-8")
+    troute = (
+        ROOT / "docs" / "installation" / "TROUTE_SETUP.md"
+    ).read_text(encoding="utf-8")
+
+    assert "## PowerShell bootstrap" not in readme
+    assert "through WSL2" in readme
+    assert "Do not run `bootstrap_nextgenda.py` from Windows PowerShell." in install
+    assert "Windows users must run NextGenDA through WSL2." in troute
+
+
+def test_bootstrap_host_gate_precedes_external_setup():
+    source = (
+        ROOT / "scripts" / "bootstrap_nextgenda.py"
+    ).read_text(encoding="utf-8")
+
+    main_source = source[source.index("def main() -> int:"):]
+
+    gate = main_source.index("_require_supported_host()")
+    assert gate < main_source.index("setup_upstreams.py")
+    assert gate < main_source.index("setup_runtime.py")
+    assert gate < main_source.index("setup_troute.py")
+
+
+def test_setup_troute_host_gate_precedes_clone():
+    source = (
+        ROOT / "scripts" / "setup_troute.py"
+    ).read_text(encoding="utf-8")
+
+    main_source = source[source.index("def main() -> int:"):]
+
+    assert (
+        main_source.index("_require_supported_host()")
+        <
+        main_source.index('"clone"')
+    )

@@ -20,6 +20,10 @@ Users may override it with:
 or:
 
     python scripts/setup_troute.py --destination /some/path
+
+Windows users must run this setup inside WSL2. The exact pinned t-route commit
+contains Linux-valid filenames that cannot be represented on native Windows
+NTFS filesystems.
 """
 
 from __future__ import annotations
@@ -110,7 +114,34 @@ def git_output(
     return result.stdout.strip()
 
 
+def _require_supported_host(
+    *,
+    os_name: str | None = None,
+) -> None:
+
+    current_os_name = (
+        os.name
+        if os_name is None
+        else str(os_name)
+    )
+
+    if current_os_name == "nt":
+
+        raise SystemExit(
+            "ERROR: native Windows cannot host the exact certified "
+            "t-route checkout.\n\n"
+            "The pinned t-route commit contains Linux-valid filenames "
+            "with ':' characters that NTFS cannot represent. "
+            "NextGenDA production on Windows is supported through WSL2.\n\n"
+            "Open an Ubuntu/WSL2 terminal and rerun the standard "
+            "NextGenDA bootstrap there. Do not disable Git NTFS "
+            "protections and do not modify the pinned t-route source."
+        )
+
+
 def main() -> int:
+
+    _require_supported_host()
 
     parser = argparse.ArgumentParser(
         description=(

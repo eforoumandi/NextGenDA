@@ -5,11 +5,16 @@ Bootstrap all external dependencies required by a fresh NextGenDA clone.
 
 The bootstrap:
 
-1. installs the pinned NGIAB preparation repositories,
-2. verifies/pulls the immutable certified runtime image,
-3. installs the pinned t-route source,
-4. writes Bash and PowerShell runtime configuration files,
-5. validates the complete prerequisite contract.
+1. verifies that the host is Linux (including Windows through WSL2),
+2. installs the pinned NGIAB preparation repositories,
+3. verifies/pulls the immutable certified runtime image,
+4. installs the pinned t-route source,
+5. writes local runtime configuration,
+6. validates the complete prerequisite contract.
+
+Native Windows/PowerShell is not a supported production host. Windows users
+must run NextGenDA inside WSL2 because the exact certified upstream source
+trees contain Linux-valid paths that NTFS cannot represent.
 
 No hydrologic model or data assimilation is executed.
 """
@@ -39,6 +44,32 @@ LOCK = (
     / "runtime"
     / "runtime-lock.json"
 )
+
+
+def _require_supported_host(
+    *,
+    os_name: str | None = None,
+) -> None:
+
+    current_os_name = (
+        os.name
+        if os_name is None
+        else str(os_name)
+    )
+
+    if current_os_name == "nt":
+
+        raise SystemExit(
+            "ERROR: native Windows/PowerShell is not a certified "
+            "NextGenDA production host.\n\n"
+            "NextGenDA is certified for Linux AMD64 and for Windows "
+            "through WSL2. The pinned t-route source contains Linux-valid "
+            "filenames (including ':' characters) that NTFS cannot "
+            "represent.\n\n"
+            "Open an Ubuntu/WSL2 terminal and run the documented "
+            "NextGenDA installation there. Do not disable Git NTFS "
+            "protections and do not modify the pinned t-route source."
+        )
 
 
 def run(
@@ -73,6 +104,8 @@ def run(
 
 
 def main() -> int:
+
+    _require_supported_host()
 
     python = (
         sys.executable
@@ -243,33 +276,12 @@ def main() -> int:
     print()
 
     print(
-        "Optional explicit runtime configuration files:"
+        "Optional explicit Bash runtime configuration:"
     )
 
     print(
-        "  Bash:       .nextgenda-runtime.env"
+        "  .nextgenda-runtime.env"
     )
-
-    print(
-        "  PowerShell: .nextgenda-runtime.ps1"
-    )
-
-    if os.name == "nt":
-
-        print()
-
-        print(
-            "NOTE: bootstrap tooling supports Docker Desktop "
-            "from PowerShell, but the scientifically certified "
-            "NextGenDA production execution path on Windows "
-            "remains WSL2/Linux AMD64."
-        )
-
-        print(
-            "For production science runs on Windows, open "
-            "your WSL2 Ubuntu terminal and use the same "
-            "repository there."
-        )
 
     return 0
 

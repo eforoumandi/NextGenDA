@@ -1,111 +1,72 @@
 # NextGenDA Beginner Installation
 
-This is the minimal installation workflow for the public NextGenDA SAC-SMA
-release.
-
 ## Supported system
 
 The scientifically certified production configuration is:
 
 - Linux x86-64 / AMD64; or
-- Windows 10/11 using WSL2 with Docker Desktop.
+- Windows 10/11 using **WSL2** with Docker Desktop.
 
-ARM64 is not yet certified.
+Native-Windows production execution is not certified.
 
-## 1. Install Git
+## Windows users: open WSL2 first
 
-Verify:
+Do not run `bootstrap_nextgenda.py` from Windows PowerShell.
+
+The exact pinned t-route source contains Linux-valid filenames with `:`
+characters. Native Windows NTFS cannot represent those filenames, so the exact
+certified source checkout must live in Linux/WSL2.
+
+A Windows Conda environment cannot be reused as the Linux Conda environment
+inside WSL2.
+
+## 1. Verify Git inside Linux/WSL2
 
 ```bash
 git --version
 ```
 
-## 2. Install Docker
+## 2. Verify Docker from Linux/WSL2
 
-Start Docker Desktop or Docker Engine and verify:
+On Windows, Docker Desktop must have WSL2 integration enabled.
 
 ```bash
 docker --version
 docker info
 ```
 
-Both commands must succeed.
-
-## 3. Install Conda or Miniforge
-
-Use a Conda-compatible environment manager such as Miniforge.
-
-Verify:
+## 3. Install/verify Conda inside Linux/WSL2
 
 ```bash
 conda --version
 ```
 
-## 4. Clone NextGenDA
+## 4. Clone NextGenDA in the Linux filesystem
 
 ```bash
+cd ~
 git clone https://github.com/eforoumandi/NextGenDA.git
 cd NextGenDA
 ```
 
-## 5. Create the NextGenDA environment
+## 5. Create the Linux environment
 
 ```bash
 conda env create -f environment.yml
 conda activate nextgenda
 ```
 
-For an existing clone:
-
-```bash
-git pull
-conda env update -f environment.yml --prune
-conda activate nextgenda
-```
-
-## 6. Bootstrap all external runtime dependencies
-
-Run one command:
+## 6. Bootstrap
 
 ```bash
 python scripts/bootstrap_nextgenda.py
 ```
 
-The bootstrap automatically:
+The bootstrap validates the Linux/WSL2 host before any external dependency is
+cloned or pulled.
 
-1. installs the exact pinned NGIAB data-preparation repository;
-2. installs the exact pinned NGIAB CloudInfra repository;
-3. verifies Docker and the certified Linux AMD64 container platform;
-4. pulls the immutable certified GHCR runtime;
-5. verifies registry-to-local Docker image identity;
-6. installs the exact pinned t-route source;
-7. writes optional shell-specific runtime configuration; and
-8. runs the full prerequisite checker.
-
-No manual source-path editing is required for the standard installation.
-
-## 7. Start NextGenDA
+## 7. Run
 
 ```bash
 nextgenda assimilate
-```
-
-The interactive workflow asks for the downstream USGS gauge, dates, forcing
-source, ensemble settings, forcing/state uncertainty, particle-filter
-uncertainty, and optional upstream assimilation gauges.
-
-## Windows note
-
-The bootstrap tooling understands Docker Desktop from Windows, but the complete
-scientifically certified NextGenDA production workflow on Windows is executed
-inside WSL2.
-
-Use an Ubuntu/WSL2 terminal for the production scientific run.
-
-## Optional diagnostic check
-
-The bootstrap already runs this automatically. It can be repeated with:
-
-```bash
-python scripts/check_prerequisites.py
 ```
