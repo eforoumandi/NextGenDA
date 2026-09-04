@@ -1,0 +1,36 @@
+SAC-SMA PF state vector, units mm:
+
+    uztwc
+    uzfwc
+    lztwc
+    lzfsc
+    lzfpc
+    adimc
+
+The initial PF implementation performs ancestry/state-vector copying only:
+
+    X_j^a = X_ancestor(j)^f
+
+It does NOT perform arbitrary additive state increments.
+
+Therefore valid parent states are copied exactly and should already satisfy
+the native SAC-SMA physical constraints.
+
+Validation bounds:
+
+    0 <= uztwc <= uztwm
+    0 <= uzfwc <= uzfwm
+    0 <= lztwc <= lztwm
+    0 <= lzfsc <= lzfsm
+    0 <= lzfpc <= lzfpm
+
+    uztwc <= adimc <= uztwm + lztwm
+
+Any future rejuvenation or continuous perturbation of SAC-SMA states requires
+an explicit constraint-preserving design and is outside the first PF test.
+
+Frozen-ground state is not included because the current implementation sets:
+
+    IFRZE = 0
+
+inside EXSAC.

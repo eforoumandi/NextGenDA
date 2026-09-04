@@ -1,0 +1,22 @@
+PORTABILITY NOTE
+================
+PREPARED_RUN_ROOT denotes the historical prepared-run workspace. Artifact-relative paths and audit content are preserved.
+
+NEXTGENDA SAC-SMA CALIBRATION BINDING AUDIT
+====================================================================================================
+
+prep_commit=7f1c99ab811ca82696ba8ff0a525ed670ac08d18
+ngen_cal_commit=70a208f11600a39d42c23f98580de2528d091be4
+package=PREPARED_RUN_ROOT
+target_divide=cat-2595504
+target_sac_config=PREPARED_RUN_ROOT/config/cat_config/SAC-SMA/cat-2595504.input
+
+Known findings before adapter implementation:
+
+1. SAC-SMA has external per-catchment input files.
+2. There are 2873 SAC-SMA files in this prepared domain.
+3. ngen-cal has no explicit SAC-SMA init-config adapter.
+4. generic ngen-cal update_config writes model_params into realization.json.
+5. NextGenDA must therefore verify the actual SAC file syntax before mutation.
+6. No calibration has been executed.
+7. No data assimilation has been executed.

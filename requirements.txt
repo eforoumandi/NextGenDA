@@ -1,0 +1,12 @@
+# NextGenDA certified Python runtime dependencies.
+#
+# t-route is an external runtime dependency and is intentionally
+# installed/configured separately.
+
+numpy==1.26.4
+pandas==3.0.5
+scipy==1.17.1
+xarray==2026.7.0
+netCDF4==1.7.4
+h5py==3.16.0
+PyYAML==6.0.3

@@ -1,0 +1,5 @@
+FROM ngiab-da-runtime:troute-baseline-dd43a7d
+
+COPY lib/libsacbmi.so /dmod/shared_libs/libsacbmi.so
+
+RUN chmod 755 /dmod/shared_libs/libsacbmi.so

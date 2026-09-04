@@ -1,0 +1,82 @@
+--- bmi_sac.before.f90	2026-08-10 18:12:08.033916255 -0500
++++ bmi_sac.after.f90	2026-08-10 18:12:08.057917272 -0500
+@@ -306,7 +306,8 @@
+     select case(name)
+     case('tair', 'precip', 'pet', &                  ! input vars
+          'qs', 'qg', 'tci', 'eta',  &                ! output vars
+-         'roimp','sdro','ssur','sif','bfs','bfp', 'bfncc')
++         'roimp','sdro','ssur','sif','bfs','bfp', 'bfncc', &
++         'uztwc','uzfwc','lztwc','lzfsc','lzfpc','adimc')
+        grid = 0
+        bmi_status = BMI_SUCCESS
+     case('uztwm', 'uzfwm', 'lztwm', 'lzfsm',  'hru_area', &     ! calibratable parameters
+@@ -583,7 +584,8 @@
+     select case(name)
+     case('tair', 'precip', 'pet',  &                ! input vars
+          'qs', 'qg', 'tci', 'eta', &                ! output vars
+-         'roimp','sdro','ssur','sif','bfs','bfp', 'bfncc')
++         'roimp','sdro','ssur','sif','bfs','bfp', 'bfncc', &
++         'uztwc','uzfwc','lztwc','lzfsc','lzfpc','adimc')
+        type = "double"
+        bmi_status = BMI_SUCCESS
+     case('uztwm', 'uzfwm', 'lztwm', 'lzfsm',  'hru_area', &     ! calibratable parameters
+@@ -824,6 +826,9 @@
+     case("hru_area")
+        size = sizeof(this%model%parameters%hru_area(1))
+        bmi_status = BMI_SUCCESS
++    case("uztwc", "uzfwc", "lztwc", "lzfsc", "lzfpc", "adimc")
++       size = sizeof(this%model%modelvar%uztwc(1))
++       bmi_status = BMI_SUCCESS
+     case default
+        size = -1
+        bmi_status = BMI_FAILURE
+@@ -953,6 +958,24 @@
+     case("bfncc")
+        dest(1) = this%model%modelvar%bfncc(1)
+        bmi_status = BMI_SUCCESS
++    case("uztwc")
++       dest(1) = this%model%modelvar%uztwc(1)
++       bmi_status = BMI_SUCCESS
++    case("uzfwc")
++       dest(1) = this%model%modelvar%uzfwc(1)
++       bmi_status = BMI_SUCCESS
++    case("lztwc")
++       dest(1) = this%model%modelvar%lztwc(1)
++       bmi_status = BMI_SUCCESS
++    case("lzfsc")
++       dest(1) = this%model%modelvar%lzfsc(1)
++       bmi_status = BMI_SUCCESS
++    case("lzfpc")
++       dest(1) = this%model%modelvar%lzfpc(1)
++       bmi_status = BMI_SUCCESS
++    case("adimc")
++       dest(1) = this%model%modelvar%adimc(1)
++       bmi_status = BMI_SUCCESS
+     case default
+        dest(:) = -1.d0
+        bmi_status = BMI_FAILURE
+@@ -1203,6 +1226,24 @@
+     case("hru_area")
+        this%model%parameters%hru_area(1) = src(1)
+        bmi_status = BMI_SUCCESS
++    case("uztwc")
++       this%model%modelvar%uztwc(1) = src(1)
++       bmi_status = BMI_SUCCESS
++    case("uzfwc")
++       this%model%modelvar%uzfwc(1) = src(1)
++       bmi_status = BMI_SUCCESS
++    case("lztwc")
++       this%model%modelvar%lztwc(1) = src(1)
++       bmi_status = BMI_SUCCESS
++    case("lzfsc")
++       this%model%modelvar%lzfsc(1) = src(1)
++       bmi_status = BMI_SUCCESS
++    case("lzfpc")
++       this%model%modelvar%lzfpc(1) = src(1)
++       bmi_status = BMI_SUCCESS
++    case("adimc")
++       this%model%modelvar%adimc(1) = src(1)
++       bmi_status = BMI_SUCCESS
+     case default
+        bmi_status = BMI_FAILURE
+     end select

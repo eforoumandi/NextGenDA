@@ -1,0 +1,62 @@
+{
+  "generic_fallback_container": {
+    "local_tag": "ngiab-da-runtime:troute-baseline-dd43a7d",
+    "required_for_normal_sac_sma_user_install": false
+  },
+  "nextgenda_project": {
+    "license": "Apache-2.0",
+    "license_file": "LICENSE",
+    "license_sha256": "5c9817c129b98e7bb966bca028c43c19107102ef8e03fe799bffb4354f4ef015"
+  },
+  "ngen": {
+    "local_checkout_commit": "fab1cd54084a067f9a6b8d77dfbbbbd5cdea4b8a",
+    "local_checkout_repository": "https://github.com/CIROH-UA/ngen.git",
+    "runtime_recorded_url": "https://github.com/CIROH-UA/ngen/tree/fab1cd54084a067f9a6b8d77dfbbbbd5cdea4b8a"
+  },
+  "production_container": {
+    "anonymous_access_verified": true,
+    "base_runtime_image": "awiciroh/ciroh-ngen-image@sha256:273d5131094c52f0efa2d26797bf4a8a4944c8906fbe9dd8cc21448c13d9eaef",
+    "certified_local_image_id": "sha256:f4922762134e6a6b8ac5e9ec79fe451aaf0f0b8135269780a4c307435a7e9628",
+    "certified_local_tag": "ngiab-da-runtime:sacsma-state-access-20260810T231207Z",
+    "distribution_status": "PUBLIC_GHCR_VERIFIED",
+    "historical_build_provenance_verified": true,
+    "immutable_registry_reference": "ghcr.io/eforoumandi/nextgenda-runtime:sacsma-state-access-rc1@sha256:f4922762134e6a6b8ac5e9ec79fe451aaf0f0b8135269780a4c307435a7e9628",
+    "planned_registry_tag": "ghcr.io/eforoumandi/nextgenda-runtime:sacsma-state-access-rc1",
+    "platform": "linux/amd64",
+    "rebuild_required": false,
+    "registry_manifest_digest": "sha256:f4922762134e6a6b8ac5e9ec79fe451aaf0f0b8135269780a4c307435a7e9628",
+    "registry_tag": "ghcr.io/eforoumandi/nextgenda-runtime:sacsma-state-access-rc1",
+    "sac_sma_bmi_sha256": "6dee5b4d16ae03522194dbcc155b0e8cd62eacbcd53c3316ad14525df757d3b5",
+    "troute_builder_image_id": "sha256:a051f7475d7f3d93bd433d1976e0e4202d8381c0434ccd6b50b4575653e15358"
+  },
+  "release_model": "sac-sma",
+  "release_policy": {
+    "allow_unpinned_latest_tag": false,
+    "automatic_runtime_setup_required": true,
+    "pull_by_digest_after_publication": true
+  },
+  "sac_sma": {
+    "bmi_source_after": "runtime/provenance/bmi_sac.after.f90",
+    "bmi_source_before": "runtime/provenance/bmi_sac.before.f90",
+    "historical_build_artifact": "sacsma-state-enabled-bmi-20260810T231207Z",
+    "rebuild_required_for_release": false,
+    "runtime_library_path": "/dmod/shared_libs/libsacbmi.so",
+    "runtime_library_sha256": "6dee5b4d16ae03522194dbcc155b0e8cd62eacbcd53c3316ad14525df757d3b5",
+    "state_access_patch": "runtime/provenance/sac_sma_state_access.patch",
+    "state_access_strategy": "isolated source copy with BMI state-access patch; upstream checkout retained unchanged",
+    "upstream_commit": "975902e3d44785f3b3503f29adfb5755120f5bf5",
+    "upstream_repository": "https://github.com/NOAA-OWP/sac-sma",
+    "upstream_source_modified": false
+  },
+  "schema_version": 1,
+  "supported_container_platforms": [
+    "linux/amd64"
+  ],
+  "t_route": {
+    "commit": "dd43a7d218274c526306041369f4e5e8e76a2cb1",
+    "license_classification": "US_GOVERNMENT_CUSTOM_NOTICE",
+    "license_file": "THIRD_PARTY_LICENSES/t-route-LICENSE",
+    "repository": "https://github.com/CIROH-UA/t-route.git",
+    "working_tree_required_clean": true
+  }
+}

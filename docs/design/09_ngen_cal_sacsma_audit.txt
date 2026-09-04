@@ -1,0 +1,30 @@
+NEXTGENDA NGEN-CAL / SAC-SMA AUDIT
+====================================================================================================
+
+ngen_cal_commit=70a208f11600a39d42c23f98580de2528d091be4
+python_source_file_count=142
+generic_namelist_support_detected=True
+explicit_sacsma_source_file_count=0
+prepared_sacsma_config_count=2873
+
+explicit_sacsma_source_files:
+  <none>
+
+TIME CONTRACT:
+  warm-up precedes calibration
+  calibration_end < assimilation_start
+  calibration and assimilation observations do not overlap
+  preparation covers warmup_start through assimilation_end
+
+SCIENTIFIC CONTRACT:
+  calibrate SAC-SMA before DA
+  freeze calibrated parameters before assimilation
+  checksum calibrated parameter files
+  evaluate calibrated deterministic baseline before DA
+
+GENERIC_NAMELIST_MUTATION_SUPPORT=FOUND
+EXPLICIT_SACSMA_SUPPORT=NOT_FOUND
+PREPARED_SACSMA_PARAMETER_FILES=FOUND
+
+NO_CALIBRATION_WAS_EXECUTED.
+NO_DATA_ASSIMILATION_WAS_EXECUTED.
