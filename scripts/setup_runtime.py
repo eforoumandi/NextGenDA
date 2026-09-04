@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 
-"""
+'''
 Install and verify the certified NextGenDA runtime container.
 
-The immutable registry manifest digest and Docker's local image ID are
-different identifiers.  NextGenDA therefore verifies:
+NextGenDA intentionally does not use ``docker manifest inspect`` for runtime
+installation. That command is experimental and can behave differently across
+Docker client versions when traversing registry manifest lists.
 
-    pinned registry digest
-        -> selected platform manifest
-        -> image config digest
-        -> local Docker image ID
+The stable verification chain is:
+
+    immutable registry reference
+        -> digest-pinned Docker pull for the certified platform
+        -> local RepoDigests contains the exact pinned registry digest
+        -> local image platform matches the certified platform
+        -> compatibility tag resolves to the same local image ID
+
+The registry manifest digest and Docker's local image ID are different
+identifiers and are not compared directly.
 
 No hydrologic model, t-route model, or data assimilation is executed.
-"""
+'''
 
 from __future__ import annotations
 
@@ -169,251 +176,107 @@ def _docker_platform(
     )
 
 
-def _manifest_json(
-    docker: str,
+def _repository_name(
     reference: str,
-) -> dict:
+) -> str:
+    '''
+    Convert a Docker reference such as
 
-    result = run(
-        [
-            docker,
-            "manifest",
-            "inspect",
-            reference,
-        ],
-        capture=True,
+        ghcr.io/org/image:tag@sha256:...
+
+    to the repository name
+
+        ghcr.io/org/image
+    '''
+
+    base = (
+        str(reference)
+        .split(
+            "@",
+            1,
+        )[0]
+        .strip()
     )
 
-    if result.returncode != 0:
+    slash = base.rfind(
+        "/"
+    )
 
-        raise SystemExit(
-            "ERROR: certified public runtime manifest "
-            "could not be inspected.\n\n"
-            + result.stdout
+    colon = base.rfind(
+        ":"
+    )
+
+    if colon > slash:
+
+        base = (
+            base[:colon]
         )
+
+    return base
+
+
+def _expected_repo_digest(
+    immutable: str,
+    digest: str,
+) -> str:
+
+    return (
+        f"{_repository_name(immutable)}"
+        f"@{digest}"
+    )
+
+
+def _parse_repo_digests(
+    raw: str,
+) -> list[str]:
 
     try:
 
         payload = json.loads(
-            result.stdout
+            raw
         )
 
     except json.JSONDecodeError as exc:
 
         raise SystemExit(
-            "ERROR: Docker returned invalid manifest JSON."
+            "ERROR: Docker returned invalid RepoDigests JSON."
         ) from exc
+
+    if payload is None:
+
+        return []
 
     if not isinstance(
         payload,
-        dict,
-    ):
-
-        raise SystemExit(
-            "ERROR: Docker manifest response "
-            "is not a JSON object."
-        )
-
-    return payload
-
-
-def _config_digest_for_platform(
-    docker: str,
-    immutable: str,
-    manifest: dict,
-    current_platform: str,
-) -> str:
-    """
-    Return the image-config digest for one Docker platform.
-
-    Single-platform manifests expose ``config.digest`` directly.
-
-    Multi-platform OCI/Docker indexes expose one descriptor per
-    platform.  NextGenDA selects the descriptor matching the Docker
-    engine platform and then reads that platform manifest's
-    ``config.digest``.
-    """
-
-    config = manifest.get(
-        "config"
-    )
-
-    if isinstance(
-        config,
-        dict,
-    ):
-
-        digest = config.get(
-            "digest"
-        )
-
-        if (
-            isinstance(
-                digest,
-                str,
-            )
-            and digest.strip()
-        ):
-
-            return digest.strip()
-
-    descriptors = manifest.get(
-        "manifests"
-    )
-
-    if not isinstance(
-        descriptors,
         list,
     ):
 
         raise SystemExit(
-            "ERROR: registry object contains neither "
-            "a config digest nor a multi-platform "
-            "manifest list."
+            "ERROR: Docker RepoDigests response "
+            "is not a JSON list."
         )
 
-    try:
+    values = []
 
-        wanted_os, wanted_arch = (
-            current_platform.split(
-                "/",
-                1,
-            )
-        )
-
-    except ValueError as exc:
-
-        raise SystemExit(
-            "ERROR: invalid platform token: "
-            f"{current_platform!r}"
-        ) from exc
-
-    selected_digest = None
-
-    for descriptor in descriptors:
+    for value in payload:
 
         if not isinstance(
-            descriptor,
-            dict,
-        ):
-            continue
-
-        descriptor_platform = (
-            descriptor.get(
-                "platform"
-            )
-        )
-
-        if not isinstance(
-            descriptor_platform,
-            dict,
-        ):
-            continue
-
-        os_name = (
-            str(
-                descriptor_platform.get(
-                    "os",
-                    "",
-                )
-            )
-            .strip()
-            .lower()
-        )
-
-        architecture = (
-            _normalize_architecture(
-                str(
-                    descriptor_platform.get(
-                        "architecture",
-                        "",
-                    )
-                )
-            )
-        )
-
-        if (
-            os_name == wanted_os
-            and architecture == wanted_arch
-        ):
-
-            value = descriptor.get(
-                "digest"
-            )
-
-            if (
-                isinstance(
-                    value,
-                    str,
-                )
-                and value.strip()
-            ):
-
-                selected_digest = (
-                    value.strip()
-                )
-
-                break
-
-    if selected_digest is None:
-
-        raise SystemExit(
-            "ERROR: certified registry object does not "
-            f"contain platform {current_platform!r}."
-        )
-
-    repository = (
-        immutable.split(
-            "@",
-            1,
-        )[0]
-    )
-
-    platform_reference = (
-        f"{repository}@{selected_digest}"
-    )
-
-    platform_manifest = (
-        _manifest_json(
-            docker,
-            platform_reference,
-        )
-    )
-
-    config = (
-        platform_manifest.get(
-            "config"
-        )
-    )
-
-    if not isinstance(
-        config,
-        dict,
-    ):
-
-        raise SystemExit(
-            "ERROR: selected platform manifest "
-            "has no config object."
-        )
-
-    digest = config.get(
-        "digest"
-    )
-
-    if (
-        not isinstance(
-            digest,
+            value,
             str,
-        )
-        or not digest.strip()
-    ):
+        ):
+            continue
 
-        raise SystemExit(
-            "ERROR: selected platform manifest "
-            "has no config digest."
+        token = (
+            value.strip()
         )
 
-    return digest.strip()
+        if token:
+
+            values.append(
+                token
+            )
+
+    return values
 
 
 def main() -> int:
@@ -579,38 +442,29 @@ def main() -> int:
         "3. CERTIFIED IMAGE"
     )
 
+    expected_repo_digest = (
+        _expected_repo_digest(
+            immutable,
+            expected_manifest_digest,
+        )
+    )
+
     print(
         f"Registry image:\n{immutable}"
     )
 
-    manifest = (
-        _manifest_json(
-            docker,
-            immutable,
-        )
-    )
-
-    expected_local_id = (
-        _config_digest_for_platform(
-            docker,
-            immutable,
-            manifest,
-            current_platform,
-        )
-    )
-
     print(
-        "Registry manifest digest:\n"
+        "Pinned registry digest:\n"
         f"  {expected_manifest_digest}"
     )
 
     print(
-        "Expected local image/config ID:\n"
-        f"  {expected_local_id}"
+        "Expected local RepoDigest:\n"
+        f"  {expected_repo_digest}"
     )
 
     print(
-        "[OK] Public immutable manifest accessible."
+        "[OK] Immutable digest lock is internally consistent."
     )
 
     heading(
@@ -621,21 +475,146 @@ def main() -> int:
         [
             docker,
             "pull",
+            "--platform",
+            current_platform,
             immutable,
-        ]
+        ],
+        capture=True,
     )
+
+    if pull.stdout:
+
+        print(
+            pull.stdout.rstrip()
+        )
 
     if pull.returncode != 0:
 
         raise SystemExit(
-            "ERROR: Docker pull failed."
+            "ERROR: digest-pinned Docker pull failed."
         )
 
-    heading(
-        "5. VERIFY PULLED IMAGE"
+    print(
+        "[OK] Digest-pinned runtime pull succeeded."
     )
 
-    inspect = run(
+    heading(
+        "5. VERIFY PINNED REGISTRY IDENTITY"
+    )
+
+    repo_digest_result = run(
+        [
+            docker,
+            "image",
+            "inspect",
+            "--format",
+            "{{json .RepoDigests}}",
+            immutable,
+        ],
+        capture=True,
+    )
+
+    if repo_digest_result.returncode != 0:
+
+        raise SystemExit(
+            "ERROR: pulled image could not be inspected.\n"
+            + repo_digest_result.stdout
+        )
+
+    repo_digests = (
+        _parse_repo_digests(
+            repo_digest_result.stdout.strip()
+        )
+    )
+
+    print(
+        "Local RepoDigests:"
+    )
+
+    if repo_digests:
+
+        for value in repo_digests:
+
+            print(
+                f"  {value}"
+            )
+
+    else:
+
+        print(
+            "  <none>"
+        )
+
+    if (
+        expected_repo_digest
+        not in repo_digests
+    ):
+
+        raise SystemExit(
+            "ERROR: local Docker image does not record "
+            "the exact certified registry RepoDigest.\n"
+            f"Expected: {expected_repo_digest}"
+        )
+
+    print(
+        "[OK] Exact certified registry RepoDigest verified."
+    )
+
+    heading(
+        "6. VERIFY LOCAL PLATFORM"
+    )
+
+    platform_result = run(
+        [
+            docker,
+            "image",
+            "inspect",
+            "--format",
+            "{{.Os}}/{{.Architecture}}",
+            immutable,
+        ],
+        capture=True,
+    )
+
+    if platform_result.returncode != 0:
+
+        raise SystemExit(
+            "ERROR: local image platform could not be inspected.\n"
+            + platform_result.stdout
+        )
+
+    local_platform = (
+        platform_result.stdout
+        .strip()
+        .lower()
+    )
+
+    print(
+        "Expected platform: "
+        f"{current_platform}"
+    )
+
+    print(
+        "Actual platform:   "
+        f"{local_platform}"
+    )
+
+    if local_platform != current_platform:
+
+        raise SystemExit(
+            "ERROR: pulled runtime platform differs "
+            "from the certified Docker engine platform."
+        )
+
+    print(
+        "[OK] Local runtime platform verified."
+    )
+
+    heading(
+        "7. CREATE NEXTGENDA COMPATIBILITY TAG"
+    )
+
+    source_id_result = run(
         [
             docker,
             "image",
@@ -647,44 +626,15 @@ def main() -> int:
         capture=True,
     )
 
-    if inspect.returncode != 0:
+    if source_id_result.returncode != 0:
 
         raise SystemExit(
-            "ERROR: pulled image could not be inspected."
+            "ERROR: local certified image ID could not be inspected."
         )
 
-    actual_id = (
-        inspect.stdout
+    source_id = (
+        source_id_result.stdout
         .strip()
-    )
-
-    print(
-        "Expected local ID: "
-        f"{expected_local_id}"
-    )
-
-    print(
-        "Actual local ID:   "
-        f"{actual_id}"
-    )
-
-    if (
-        actual_id
-        != expected_local_id
-    ):
-
-        raise SystemExit(
-            "ERROR: local Docker image ID does not "
-            "match the config digest referenced by "
-            "the certified immutable registry manifest."
-        )
-
-    print(
-        "[OK] Registry-to-local image identity verified."
-    )
-
-    heading(
-        "6. CREATE NEXTGENDA COMPATIBILITY TAG"
     )
 
     tag = run(
@@ -725,7 +675,17 @@ def main() -> int:
         .strip()
     )
 
-    if tagged_id != actual_id:
+    print(
+        "Certified local image ID: "
+        f"{source_id}"
+    )
+
+    print(
+        "Compatibility-tag image ID: "
+        f"{tagged_id}"
+    )
+
+    if tagged_id != source_id:
 
         raise SystemExit(
             "ERROR: compatibility tag does not reference "
@@ -741,9 +701,31 @@ def main() -> int:
     )
 
     print(
-        "The certified NextGenDA SAC-SMA runtime "
-        "is installed and its registry-to-local "
-        "identity is verified."
+        "The certified NextGenDA SAC-SMA runtime is installed."
+    )
+
+    print(
+        "Verified identity chain:"
+    )
+
+    print(
+        "  immutable digest reference"
+    )
+
+    print(
+        "  -> successful digest-pinned pull"
+    )
+
+    print(
+        "  -> exact local RepoDigest"
+    )
+
+    print(
+        "  -> certified local platform"
+    )
+
+    print(
+        "  -> compatibility tag with identical local image ID"
     )
 
     return 0

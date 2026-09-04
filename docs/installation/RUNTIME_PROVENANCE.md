@@ -34,15 +34,21 @@ identifiers and are not expected to be numerically equal.
 
 NextGenDA verifies the complete identity chain:
 
-1. immutable registry reference;
-2. selected certified Docker platform;
-3. platform image manifest;
-4. manifest `config.digest`;
-5. local Docker image `.Id`;
-6. compatibility-tag `.Id`.
+1. the immutable registry reference contains the certified manifest digest;
+2. the Docker engine reports a certified platform (`linux/amd64`);
+3. Docker pulls that exact image by immutable digest and explicit platform;
+4. the pulled image's local `RepoDigests` contains the exact certified
+   repository digest;
+5. the pulled image reports the certified local platform; and
+6. the NextGenDA compatibility tag resolves to the same local image `.Id`.
 
-This preserves strict runtime provenance without incorrectly comparing a
-registry manifest digest with a local image/config digest.
+The bootstrap intentionally does not depend on `docker manifest inspect`.
+That Docker command is experimental and can behave differently across Docker
+client versions when traversing registry manifest lists. Digest-pinned
+`docker pull` is the stable installation primitive.
+
+The registry manifest digest and the local Docker image `.Id` remain separate
+identifiers and are not compared directly.
 
 ## Pinned NGIAB data-preparation backend
 

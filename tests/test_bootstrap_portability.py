@@ -80,108 +80,112 @@ def test_runtime_architecture_normalization():
     )
 
 
-def test_single_platform_manifest_uses_config_digest():
+def test_runtime_repository_name_strips_tag_and_digest():
     runtime = load_script(
         "setup_runtime.py"
     )
 
-    digest = (
-        runtime._config_digest_for_platform(
-            "docker",
-            "example.invalid/image@sha256:manifest",
-            {
-                "config": {
-                    "digest":
-                        "sha256:config",
-                }
-            },
-            "linux/amd64",
-        )
-    )
-
-    assert digest == "sha256:config"
-
-
-def test_multiplatform_manifest_selects_linux_amd64(
-    monkeypatch,
-):
-    runtime = load_script(
-        "setup_runtime.py"
-    )
-
-    seen = []
-
-    def fake_manifest(
-        docker,
-        reference,
-    ):
-        seen.append(
-            reference
-        )
-
-        return {
-            "config": {
-                "digest":
-                    "sha256:linux-config",
-            }
-        }
-
-    monkeypatch.setattr(
-        runtime,
-        "_manifest_json",
-        fake_manifest,
-    )
-
-    digest = (
-        runtime._config_digest_for_platform(
-            "docker",
+    assert (
+        runtime._repository_name(
             (
-                "example.invalid/image"
-                "@sha256:index"
+                "ghcr.io/example/runtime:rc1"
+                "@sha256:abcdef"
+            )
+        )
+        ==
+        "ghcr.io/example/runtime"
+    )
+
+    assert (
+        runtime._repository_name(
+            (
+                "registry.example:5000/example/runtime"
+                "@sha256:abcdef"
+            )
+        )
+        ==
+        "registry.example:5000/example/runtime"
+    )
+
+
+def test_runtime_expected_repo_digest_is_exact():
+    runtime = load_script(
+        "setup_runtime.py"
+    )
+
+    assert (
+        runtime._expected_repo_digest(
+            (
+                "ghcr.io/example/runtime:rc1"
+                "@sha256:old"
             ),
-            {
-                "manifests": [
-                    {
-                        "digest":
-                            "sha256:arm",
+            "sha256:certified",
+        )
+        ==
+        (
+            "ghcr.io/example/runtime"
+            "@sha256:certified"
+        )
+    )
 
-                        "platform": {
-                            "os":
-                                "linux",
 
-                            "architecture":
-                                "arm64",
-                        },
-                    },
-                    {
-                        "digest":
-                            "sha256:amd",
+def test_runtime_repo_digest_json_parsing():
+    runtime = load_script(
+        "setup_runtime.py"
+    )
 
-                        "platform": {
-                            "os":
-                                "linux",
+    assert (
+        runtime._parse_repo_digests(
+            (
+                '["ghcr.io/example/runtime@sha256:a",'
+                '"ghcr.io/example/runtime@sha256:b"]'
+            )
+        )
+        ==
+        [
+            "ghcr.io/example/runtime@sha256:a",
+            "ghcr.io/example/runtime@sha256:b",
+        ]
+    )
 
-                            "architecture":
-                                "amd64",
-                        },
-                    },
-                ]
-            },
-            "linux/amd64",
+    assert (
+        runtime._parse_repo_digests(
+            "null"
+        )
+        ==
+        []
+    )
+
+
+def test_runtime_setup_avoids_experimental_manifest_inspect():
+    source = (
+        ROOT
+        / "scripts"
+        / "setup_runtime.py"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    compact = (
+        " ".join(
+            source.split()
         )
     )
 
     assert (
-        digest
-        == "sha256:linux-config"
+        'docker, "manifest", "inspect"'
+        not in compact
     )
 
-    assert seen == [
-        (
-            "example.invalid/image"
-            "@sha256:amd"
-        )
-    ]
+    assert (
+        '"pull", "--platform"'
+        in compact
+    )
+
+    assert (
+        "{{json .RepoDigests}}"
+        in source
+    )
 
 
 def test_powershell_quoting_is_safe():
