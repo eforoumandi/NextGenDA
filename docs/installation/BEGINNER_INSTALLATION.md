@@ -1,98 +1,111 @@
 # NextGenDA Beginner Installation
 
-This guide is being validated against the release candidate before the
-first public code release.
+This is the minimal installation workflow for the public NextGenDA SAC-SMA
+release.
 
-It assumes no prior knowledge of:
+## Supported system
 
-- Linux or WSL2
-- Git
-- Conda/Miniforge
-- Python environments
-- Docker
-- NextGen/ngen
-- t-route
-- data assimilation
-- SAC-SMA
+The scientifically certified production configuration is:
 
-The final release guide will be validated from a completely fresh clone.
-
-## Step 0 — Supported system
-
-Initial certified platform:
-
-- Linux x86-64
-- Windows 10/11 through WSL2 with Docker Desktop
-- Docker-compatible Linux AMD64 runtime
+- Linux x86-64 / AMD64; or
+- Windows 10/11 using WSL2 with Docker Desktop.
 
 ARM64 is not yet certified.
 
-## Step 1 — Install Git
+## 1. Install Git
 
 Verify:
 
 ```bash
 git --version
-Step 2 — Install Docker
+```
 
-Verify:
+## 2. Install Docker
 
+Start Docker Desktop or Docker Engine and verify:
+
+```bash
 docker --version
 docker info
+```
 
 Both commands must succeed.
 
-Step 3 — Install Miniforge
+## 3. Install Conda or Miniforge
 
-Create a Conda-compatible Python environment manager using Miniforge.
+Use a Conda-compatible environment manager such as Miniforge.
 
-The final guide will provide the exact download/install commands.
+Verify:
 
-Step 4 — Obtain NextGenDA
+```bash
+conda --version
+```
 
-After the public GitHub repository exists:
+## 4. Clone NextGenDA
 
-git clone <NEXTGENDA_GITHUB_URL>
+```bash
+git clone https://github.com/eforoumandi/NextGenDA.git
 cd NextGenDA
-Step 5 — Create the Python environment
+```
+
+## 5. Create the NextGenDA environment
+
+```bash
 conda env create -f environment.yml
 conda activate nextgenda
-Step 6 — Bootstrap the certified external runtime
+```
+
+For an existing clone:
+
+```bash
+git pull
+conda env update -f environment.yml --prune
+conda activate nextgenda
+```
+
+## 6. Bootstrap all external runtime dependencies
+
+Run one command:
+
+```bash
 python scripts/bootstrap_nextgenda.py
+```
 
-This installs/verifies:
+The bootstrap automatically:
 
-the immutable certified GHCR runtime container;
-the exact pinned t-route source checkout.
-Step 7 — Activate local runtime configuration
-source .nextgenda-runtime.env
-Step 8 — Verify prerequisites
+1. installs the exact pinned NGIAB data-preparation repository;
+2. installs the exact pinned NGIAB CloudInfra repository;
+3. verifies Docker and the certified Linux AMD64 container platform;
+4. pulls the immutable certified GHCR runtime;
+5. verifies registry-to-local Docker image identity;
+6. installs the exact pinned t-route source;
+7. writes optional shell-specific runtime configuration; and
+8. runs the full prerequisite checker.
+
+No manual source-path editing is required for the standard installation.
+
+## 7. Start NextGenDA
+
+```bash
+nextgenda assimilate
+```
+
+The interactive workflow asks for the downstream USGS gauge, dates, forcing
+source, ensemble settings, forcing/state uncertainty, particle-filter
+uncertainty, and optional upstream assimilation gauges.
+
+## Windows note
+
+The bootstrap tooling understands Docker Desktop from Windows, but the complete
+scientifically certified NextGenDA production workflow on Windows is executed
+inside WSL2.
+
+Use an Ubuntu/WSL2 terminal for the production scientific run.
+
+## Optional diagnostic check
+
+The bootstrap already runs this automatically. It can be repeated with:
+
+```bash
 python scripts/check_prerequisites.py
-Remaining sections before final release
-
-The final guide will additionally cover:
-
-NextGen/ngen relationship to the containerized runtime
-hydrologic input/package preparation
-selecting a USGS target gauge
-selecting upstream gauges
-warm-up and assimilation dates
-ensemble size
-forcing perturbations
-SAC-SMA state perturbations
-PF observation/prediction errors
-single-gauge run
-multigauge run
-runtime monitoring
-output directories and files
-routing EnSRF diagnostics
-SAC-SMA PF diagnostics
-ESS and resampling
-restart/recovery
-reproducibility
-troubleshooting
-updating NextGenDA
-citation and software versioning
-
-These sections will be finalized only after the matched N=50 science
-validation and fresh-clone release tests are complete.
+```

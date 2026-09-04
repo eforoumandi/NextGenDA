@@ -40,17 +40,21 @@ conda activate nextgenda
 python scripts/bootstrap_nextgenda.py
 ```
 
-The bootstrap workflow verifies or installs the certified runtime resources,
-retrieves the exact pinned t-route source revision, and writes local runtime
-environment information.
+This is the standard one-command dependency bootstrap. It automatically:
 
-Load that environment:
+- checks out the exact pinned NGIAB preparation repositories;
+- verifies and pulls the immutable certified runtime container;
+- installs the exact pinned t-route source revision;
+- writes optional Bash and PowerShell runtime configuration files; and
+- runs the complete prerequisite checker.
 
-```bash
-source .nextgenda-runtime.env
-```
+For the standard portable installation, no manual path editing and no required
+`source` command are needed.
 
-## 5. Check prerequisites
+## 5. Recheck prerequisites if needed
+
+The bootstrap already performs this check. To rerun it later for diagnostic
+purposes:
 
 ```bash
 python scripts/check_prerequisites.py
@@ -304,8 +308,6 @@ For a normal source update:
 git pull
 conda activate nextgenda
 python scripts/bootstrap_nextgenda.py
-source .nextgenda-runtime.env
-python scripts/check_prerequisites.py
 ```
 
 If a release changes its pinned runtime or t-route revision, use the versions
@@ -338,7 +340,6 @@ docker version
 Run:
 
 ```bash
-source .nextgenda-runtime.env
 ```
 
 ### Prerequisite check fails

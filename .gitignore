@@ -84,3 +84,5 @@ dist/
 /artifacts/
 /data_assimilation/
 /.nextgenda-runtime.env
+/.nextgenda-runtime.ps1
+/upstream/

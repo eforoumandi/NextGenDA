@@ -1,45 +1,54 @@
 #!/usr/bin/env python3
 
 """
-Bootstrap external NextGenDA runtime dependencies.
+Bootstrap all external dependencies required by a fresh NextGenDA clone.
 
-This script intentionally does not create the Conda environment itself,
-because it must run from within the already activated NextGenDA environment.
+The bootstrap:
 
-It performs:
-
-1. certified GHCR runtime setup,
-2. certified t-route checkout,
-3. local runtime environment-file creation,
-4. prerequisite checking.
+1. installs the pinned NGIAB preparation repositories,
+2. verifies/pulls the immutable certified runtime image,
+3. installs the pinned t-route source,
+4. writes Bash and PowerShell runtime configuration files,
+5. validates the complete prerequisite contract.
 
 No hydrologic model or data assimilation is executed.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 
 
-ROOT = Path(
-    __file__
-).resolve().parents[1]
-
+ROOT = (
+    Path(__file__)
+    .resolve()
+    .parents[1]
+)
 
 SCRIPTS = (
     ROOT
     / "scripts"
 )
 
+LOCK = (
+    ROOT
+    / "runtime"
+    / "runtime-lock.json"
+)
+
 
 def run(
     args: list[str],
+    *,
+    environment: dict[str, str] | None = None,
 ) -> None:
 
     print()
+
     print(
         "$ "
         + " ".join(
@@ -49,7 +58,10 @@ def run(
 
     result = subprocess.run(
         args,
-        cwd=str(ROOT),
+        cwd=str(
+            ROOT
+        ),
+        env=environment,
         check=False,
     )
 
@@ -62,68 +74,87 @@ def run(
 
 def main() -> int:
 
-    python = sys.executable
+    python = (
+        sys.executable
+    )
 
+    lock = json.loads(
+        LOCK.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    runtime_image = (
+        lock[
+            "production_container"
+        ][
+            "immutable_registry_reference"
+        ]
+    )
+
+    troute_commit = (
+        lock[
+            "t_route"
+        ][
+            "commit"
+        ]
+    )
 
     run([
         python,
+
+        str(
+            SCRIPTS
+            / "setup_upstreams.py"
+        ),
+    ])
+
+    run([
+        python,
+
         str(
             SCRIPTS
             / "setup_runtime.py"
         ),
     ])
 
-
-    destination = os.environ.get(
-        "NEXTGENDA_T_ROUTE_SOURCE"
+    destination = (
+        os.environ.get(
+            "NEXTGENDA_T_ROUTE_SOURCE"
+        )
     )
 
-
-    command = [
+    troute_command = [
         python,
+
         str(
             SCRIPTS
             / "setup_troute.py"
         ),
     ]
 
-
     if destination:
 
-        command.extend([
+        troute_command.extend([
             "--destination",
             destination,
         ])
 
-
     run(
-        command
+        troute_command
     )
-
 
     if destination:
 
-        troute_path = Path(
-            destination
-        ).expanduser().resolve()
+        troute_path = (
+            Path(
+                destination
+            )
+            .expanduser()
+            .resolve()
+        )
 
     else:
-
-        #
-        # setup_troute.py uses the exact runtime-lock commit
-        # under the portable per-user data directory.
-        #
-        import json
-
-        lock = json.loads(
-            (
-                ROOT
-                / "runtime"
-                / "runtime-lock.json"
-            ).read_text(
-                encoding="utf-8"
-            )
-        )
 
         troute_path = (
             Path.home()
@@ -131,34 +162,54 @@ def main() -> int:
             / "share"
             / "nextgenda"
             / "t-route"
-            / lock[
-                "t_route"
-            ][
-                "commit"
-            ]
+            / troute_commit
         ).resolve()
-
 
     run([
         python,
+
         str(
             SCRIPTS
             / "write_runtime_env.py"
         ),
+
         "--troute-source",
         str(
             troute_path
         ),
     ])
 
-
-    environment = (
-        ROOT
-        / ".nextgenda-runtime.env"
+    validation_environment = (
+        os.environ.copy()
     )
 
+    validation_environment[
+        "NEXTGENDA_T_ROUTE_SOURCE"
+    ] = str(
+        troute_path
+    )
+
+    validation_environment[
+        "NEXTGENDA_RUNTIME_IMAGE"
+    ] = runtime_image
+
+    run(
+        [
+            python,
+
+            str(
+                SCRIPTS
+                / "check_prerequisites.py"
+            ),
+        ],
+
+        environment=(
+            validation_environment
+        ),
+    )
 
     print()
+
     print(
         "=" * 80
     )
@@ -174,27 +225,51 @@ def main() -> int:
     print()
 
     print(
-        "Activate the runtime configuration:"
+        "All default runtime locations are configured."
     )
 
     print()
 
     print(
-        f'  source "{environment}"'
+        "You can now run:"
     )
 
     print()
 
     print(
-        "Then run:"
+        "  nextgenda assimilate"
     )
 
     print()
 
     print(
-        "  python scripts/check_prerequisites.py"
+        "Optional explicit runtime configuration files:"
     )
 
+    print(
+        "  Bash:       .nextgenda-runtime.env"
+    )
+
+    print(
+        "  PowerShell: .nextgenda-runtime.ps1"
+    )
+
+    if os.name == "nt":
+
+        print()
+
+        print(
+            "NOTE: bootstrap tooling supports Docker Desktop "
+            "from PowerShell, but the scientifically certified "
+            "NextGenDA production execution path on Windows "
+            "remains WSL2/Linux AMD64."
+        )
+
+        print(
+            "For production science runs on Windows, open "
+            "your WSL2 Ubuntu terminal and use the same "
+            "repository there."
+        )
 
     return 0
 

@@ -13,6 +13,7 @@ dependencies:
   - netcdf4=1.7.4
   - h5py=3.16.0
   - pyyaml=6.0.3
+  - uv=0.12.5
   - pytest
   - pip:
       - -e .

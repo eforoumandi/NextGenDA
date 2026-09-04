@@ -16,7 +16,6 @@
   "production_container": {
     "anonymous_access_verified": true,
     "base_runtime_image": "awiciroh/ciroh-ngen-image@sha256:273d5131094c52f0efa2d26797bf4a8a4944c8906fbe9dd8cc21448c13d9eaef",
-    "certified_local_image_id": "sha256:f4922762134e6a6b8ac5e9ec79fe451aaf0f0b8135269780a4c307435a7e9628",
     "certified_local_tag": "ngiab-da-runtime:sacsma-state-access-20260810T231207Z",
     "distribution_status": "PUBLIC_GHCR_VERIFIED",
     "historical_build_provenance_verified": true,

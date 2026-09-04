@@ -336,10 +336,9 @@ def _default_artifact_parent(
 
     return (
         Path.home()
-        / "NextGen"
-        / "development"
-        / "ngiab_da"
-        / "ngiab-da"
+        / ".local"
+        / "share"
+        / "nextgenda"
         / "artifacts"
     )
 
@@ -347,12 +346,29 @@ def _default_artifact_parent(
 def _default_troute_source(
 ) -> Path:
 
+    configured = (
+        os.environ.get(
+            "NEXTGENDA_T_ROUTE_SOURCE"
+        )
+    )
+
+    if configured:
+
+        return (
+            Path(
+                configured
+            )
+            .expanduser()
+            .resolve()
+        )
+
     return (
         Path.home()
-        / "NextGen"
-        / "development"
-        / "ngiab_da"
+        / ".local"
+        / "share"
+        / "nextgenda"
         / "t-route"
+        / "dd43a7d218274c526306041369f4e5e8e76a2cb1"
     )
 
 
@@ -494,6 +510,22 @@ def _resolve_runtime_image(
             )
 
         return value
+
+    configured = (
+        os.environ.get(
+            "NEXTGENDA_RUNTIME_IMAGE"
+        )
+    )
+
+    if configured is not None:
+
+        value = (
+            configured.strip()
+        )
+
+        if value:
+
+            return value
 
     if adapter.default_runtime_image is None:
 

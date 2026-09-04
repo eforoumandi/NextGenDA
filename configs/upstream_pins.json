@@ -1,0 +1,10 @@
+{
+  "NGIAB_CloudInfra": {
+    "commit": "e5301b7c4fb8588e75574b92cda02ffaca168124",
+    "repository": "https://github.com/CIROH-UA/NGIAB-CloudInfra.git"
+  },
+  "NGIAB_data_preprocess": {
+    "commit": "7f1c99ab811ca82696ba8ff0a525ed670ac08d18",
+    "repository": "https://github.com/CIROH-UA/NGIAB_data_preprocess.git"
+  }
+}
