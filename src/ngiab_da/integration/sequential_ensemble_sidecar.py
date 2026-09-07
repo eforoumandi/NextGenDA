@@ -171,147 +171,8 @@ def _number(
 
 
 
-CFE_STATE_AND_QLAT_REQUEST_KIND = "cfe_state_and_qlat"
 ROUTING_QLAT_ONLY_REQUEST_KIND = "routing_qlat_only"
 SACSMA_STATE_AND_QLAT_REQUEST_KIND = "sacsma_state_and_qlat"
-
-
-def _validate_cfe_member_request(
-    payload: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Validate and normalize one NGen member request."""
-
-    if _integer(payload, "protocol_version") != PROTOCOL_VERSION:
-        raise SequentialEnsembleProtocolError(
-            "Unsupported member protocol version."
-        )
-
-    normalized: dict[str, Any] = {
-        "protocol_version": PROTOCOL_VERSION,
-        "run_id": _string(payload, "run_id"),
-        "member_id": _string(payload, "member_id"),
-        "generation": _integer(
-            payload,
-            "generation",
-            minimum=0,
-        ),
-        "cycle_index": _integer(
-            payload,
-            "cycle_index",
-            minimum=0,
-        ),
-        "analysis_epoch_seconds": _integer(
-            payload,
-            "analysis_epoch_seconds",
-        ),
-    }
-
-    states = payload.get("catchment_states")
-    if not isinstance(states, list) or not states:
-        raise SequentialEnsembleProtocolError(
-            "catchment_states must be a non-empty array."
-        )
-
-    normalized_states: list[dict[str, Any]] = []
-    state_keys: set[tuple[str, int]] = set()
-    for raw_state in states:
-        if not isinstance(raw_state, Mapping):
-            raise SequentialEnsembleProtocolError(
-                "Each catchment state must be an object."
-            )
-        state = {
-            "catchment_id": _string(
-                raw_state,
-                "catchment_id",
-            ),
-            "module_index": _integer(
-                raw_state,
-                "module_index",
-                minimum=0,
-            ),
-            "SOIL_STORAGE": _number(
-                raw_state,
-                "SOIL_STORAGE",
-                minimum=0.0,
-            ),
-            "GW_STORAGE": _number(
-                raw_state,
-                "GW_STORAGE",
-                minimum=0.0,
-            ),
-        }
-        key = (state["catchment_id"], state["module_index"])
-        if key in state_keys:
-            raise SequentialEnsembleProtocolError(
-                f"Duplicate catchment state: {key!r}."
-            )
-        state_keys.add(key)
-        normalized_states.append(state)
-
-    qlat = payload.get("catchment_qlat")
-    if not isinstance(qlat, list) or not qlat:
-        raise SequentialEnsembleProtocolError(
-            "catchment_qlat must be a non-empty array."
-        )
-
-    normalized_qlat: list[dict[str, Any]] = []
-    qlat_ids: set[str] = set()
-    for raw_qlat in qlat:
-        if not isinstance(raw_qlat, Mapping):
-            raise SequentialEnsembleProtocolError(
-                "Each catchment qlat entry must be an object."
-            )
-        catchment_id = _string(
-            raw_qlat,
-            "catchment_id",
-        )
-        if catchment_id in qlat_ids:
-            raise SequentialEnsembleProtocolError(
-                f"Duplicate catchment qlat: {catchment_id!r}."
-            )
-        qlat_ids.add(catchment_id)
-
-        available_value = raw_qlat.get("available")
-        if isinstance(available_value, str):
-            available = available_value.lower() == "true"
-        elif isinstance(available_value, bool):
-            available = available_value
-        else:
-            raise SequentialEnsembleProtocolError(
-                "catchment_qlat.available must be boolean."
-            )
-
-        normalized_qlat.append(
-            {
-                "catchment_id": catchment_id,
-                "value": _number(raw_qlat, "value"),
-                "units": _string(raw_qlat, "units"),
-                "source_variable": _string(
-                    raw_qlat,
-                    "source_variable",
-                ),
-                "available": available,
-            }
-        )
-
-    if qlat_ids != {state[0] for state in state_keys}:
-        raise SequentialEnsembleProtocolError(
-            "catchment_qlat IDs must equal catchment-state IDs."
-        )
-
-    normalized["catchment_states"] = sorted(
-        normalized_states,
-        key=lambda item: (
-            item["catchment_id"],
-            item["module_index"],
-        ),
-    )
-    normalized["catchment_qlat"] = sorted(
-        normalized_qlat,
-        key=lambda item: item["catchment_id"],
-    )
-    return normalized
-
 
 
 def _validate_sacsma_member_request(
@@ -639,19 +500,12 @@ def _validate_sacsma_member_request(
 def validate_member_request(
     payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Validate either CFE-state or routing-qlat-only payloads."""
+    """Validate one explicit SAC-SMA-state or routing-only payload."""
 
-    request_kind = payload.get(
+    request_kind = _string(
+        payload,
         "request_kind",
-        CFE_STATE_AND_QLAT_REQUEST_KIND,
     )
-
-    if request_kind == CFE_STATE_AND_QLAT_REQUEST_KIND:
-        normalized = _validate_cfe_member_request(payload)
-        normalized["request_kind"] = (
-            CFE_STATE_AND_QLAT_REQUEST_KIND
-        )
-        return normalized
 
     if request_kind == SACSMA_STATE_AND_QLAT_REQUEST_KIND:
         return _validate_sacsma_member_request(payload)
@@ -790,7 +644,6 @@ def _forecast_only_response(
         ],
         "status": "forecast_only",
         "reason": reason,
-        "cfe_analysis_states": [],
     }
 
 
@@ -810,38 +663,6 @@ def identity_analysis(
         member_id: copy.deepcopy(request["catchment_states"])
         for member_id, request in zip(member_ids, requests)
     }
-
-
-def member_scale_analysis(
-    requests: tuple[dict[str, Any], ...],
-    member_ids: tuple[str, ...],
-) -> Mapping[str, Sequence[Mapping[str, Any]]]:
-    """Deterministic validation analyzer with member-specific factors."""
-
-    center = (len(member_ids) - 1) / 2.0
-    result: dict[str, list[dict[str, Any]]] = {}
-    for index, (member_id, request) in enumerate(
-        zip(member_ids, requests)
-    ):
-        factor = 1.0 + 0.02 * (index - center)
-        analyzed: list[dict[str, Any]] = []
-        for state in request["catchment_states"]:
-            analyzed.append(
-                {
-                    "catchment_id": state["catchment_id"],
-                    "module_index": state["module_index"],
-                    "SOIL_STORAGE": max(
-                        0.0,
-                        state["SOIL_STORAGE"] * factor,
-                    ),
-                    "GW_STORAGE": max(
-                        0.0,
-                        state["GW_STORAGE"] * factor,
-                    ),
-                }
-            )
-        result[member_id] = analyzed
-    return result
 
 
 @dataclass
@@ -932,10 +753,9 @@ class SequentialEnsembleBarrier:
 
         request_kinds = {
             str(
-                request.get(
-                    "request_kind",
-                    CFE_STATE_AND_QLAT_REQUEST_KIND,
-                )
+                request[
+                    "request_kind"
+                ]
             )
             for request in ordered_requests
         }
@@ -951,7 +771,7 @@ class SequentialEnsembleBarrier:
             "sacsma_analysis_states"
             if request_kind
             == SACSMA_STATE_AND_QLAT_REQUEST_KIND
-            else "cfe_analysis_states"
+            else None
         )
 
         analyzed = self._analyzer(
@@ -969,7 +789,8 @@ class SequentialEnsembleBarrier:
             ordered_requests,
         ):
             states = list(analyzed[member_id])
-            prepared[member_id] = {
+
+            response: dict[str, Any] = {
                 "protocol_version": PROTOCOL_VERSION,
                 "run_id": request["run_id"],
                 "member_id": member_id,
@@ -979,8 +800,22 @@ class SequentialEnsembleBarrier:
                     "analysis_epoch_seconds"
                 ],
                 "status": "analysis",
-                response_state_key: states,
             }
+
+            if response_state_key is not None:
+                response[
+                    response_state_key
+                ] = states
+
+            elif states:
+                raise SequentialEnsembleProtocolError(
+                    "routing_qlat_only analyzer result must not "
+                    "contain hydrologic model states."
+                )
+
+            prepared[
+                member_id
+            ] = response
 
         # The expensive/blocking analyzer ran outside this condition.
         # Commit responses atomically only after it returns.
@@ -1386,11 +1221,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--max-requests",
         type=int,
     )
-    parser.add_argument(
-        "--analysis-mode",
-        choices=("identity", "member-scale"),
-        default="identity",
-    )
     parser.add_argument("--event-log")
     args = parser.parse_args(argv)
 
@@ -1407,15 +1237,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             with event_log.open("a", encoding="utf-8") as stream:
                 stream.write(_canonical_json(event) + "\n")
 
-    analyzer = (
-        identity_analysis
-        if args.analysis_mode == "identity"
-        else member_scale_analysis
-    )
     barrier = SequentialEnsembleBarrier(
         args.members,
         timeout_seconds=args.barrier_timeout,
-        analyzer=analyzer,
         event_callback=emit,
     )
     server = SequentialEnsembleSidecarServer(
