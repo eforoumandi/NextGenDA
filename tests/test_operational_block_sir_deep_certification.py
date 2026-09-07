@@ -175,15 +175,13 @@ def _runoff_binding(
     # Numerical covariance stabilization only.
     binding._regularization = 1.0e-14
 
-    # These quantities are used only to populate legacy/diagnostic
-    # RoutingPosteriorQlat.error_std in this test path. They do not enter
-    # the corrected density-ratio weights.
-    binding._relative_error = 0.02
-    binding._minimum_error = 1.0e-12
 
-    binding._pf_observation_relative_error = 0.10
-    binding._pf_prediction_relative_error = 0.10
-    binding._pf_minimum_error_std_m3s = 1.0e-8
+    binding._diagnostic_error_floor = float(
+        np.finfo(
+            np.float64
+        ).eps
+    )
+
 
     return binding
 

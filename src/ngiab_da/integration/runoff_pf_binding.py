@@ -1,4 +1,4 @@
-"""Generic runoff-generation particle-filter binding utilities.
+"""Shared runoff-assimilation binding utilities.
 
 Contains PF bookkeeping, deterministic seeding, contiguous cycle
 registration, qlat extraction, and routing-posterior-to-qlat
@@ -18,7 +18,6 @@ from ngiab_da.engine.cycle import CycleWindow
 
 class RunoffPFBindingError(RuntimeError):
     """Raised when the runoff-PF binding contract is violated."""
-
 
 
 _RAW_OBSERVATION_KEY_TOKENS = (
@@ -46,7 +45,7 @@ def _assert_no_raw_observation_fields(value: Any) -> None:
             ):
                 raise RunoffPFBindingError(
                     "Raw discharge/USGS fields are prohibited from "
-                    f"CFE PF durable payloads: {key!r}."
+                    f"runoff-assimilation durable payloads: {key!r}."
                 )
             _assert_no_raw_observation_fields(item)
         return
@@ -57,165 +56,135 @@ def _assert_no_raw_observation_fields(value: Any) -> None:
 
 
 class RunoffPFBinding:
-    """Model-independent runoff-generation PF state and utilities."""
+    """Shared runoff-assimilation state and routing-to-qlat utilities."""
 
     def __init__(
         self,
         member_ids: Sequence[str],
         output_root: str | Path,
         *,
-        prior_weights: Any | None = None,
-        resampling_threshold_fraction: float = 0.5,
-        force_resampling: bool = False,
-        pf_observation_relative_error: float = 0.10,
-        pf_prediction_relative_error: float = 0.10,
-        pf_minimum_error_std_m3s: float = 1.0,
         pf_random_seed: int | None = None,
-        minimum_error_std_m3s: float = 1.0e-8,
-        relative_error_floor: float = 0.02,
         covariance_regularization_fraction: float = 1.0e-12,
         enabled: bool = True,
     ) -> None:
-        ids = tuple(str(value).strip() for value in member_ids)
-        if not ids or any(not value for value in ids):
+        ids = tuple(
+            str(value).strip()
+            for value in member_ids
+        )
+
+        if (
+            not ids
+            or any(
+                not value
+                for value in ids
+            )
+        ):
             raise ValueError(
                 "member_ids must contain non-empty strings."
             )
+
         if len(set(ids)) != len(ids):
-            raise ValueError("member_ids must be unique.")
-
-        threshold = float(resampling_threshold_fraction)
-        if (
-            not math.isfinite(threshold)
-            or threshold <= 0.0
-            or threshold > 1.0
-        ):
             raise ValueError(
-                "resampling_threshold_fraction must lie in (0, 1]."
+                "member_ids must be unique."
             )
-
-        pf_observation_error = float(
-            pf_observation_relative_error
-        )
-        pf_prediction_error = float(
-            pf_prediction_relative_error
-        )
-        pf_minimum_error = float(
-            pf_minimum_error_std_m3s
-        )
 
         if pf_random_seed is None:
             resolved_pf_random_seed = None
+
         else:
-            if isinstance(pf_random_seed, bool):
+            if isinstance(
+                pf_random_seed,
+                bool,
+            ):
                 raise TypeError(
                     "pf_random_seed must be an integer or None."
                 )
-            resolved_pf_random_seed = int(pf_random_seed)
+
+            resolved_pf_random_seed = int(
+                pf_random_seed
+            )
+
             if resolved_pf_random_seed < 0:
                 raise ValueError(
                     "pf_random_seed must be nonnegative."
                 )
 
-        minimum_error = float(minimum_error_std_m3s)
-        relative_error = float(relative_error_floor)
         regularization = float(
             covariance_regularization_fraction
         )
 
         if (
-            not math.isfinite(pf_observation_error)
-            or pf_observation_error < 0.0
+            not math.isfinite(
+                regularization
+            )
+            or
+            regularization < 0.0
         ):
             raise ValueError(
-                "pf_observation_relative_error must be "
+                "covariance_regularization_fraction must be "
                 "finite and nonnegative."
             )
 
-        if (
-            not math.isfinite(pf_prediction_error)
-            or pf_prediction_error < 0.0
-        ):
-            raise ValueError(
-                "pf_prediction_relative_error must be "
-                "finite and nonnegative."
-            )
+        root = (
+            Path(output_root)
+            .expanduser()
+            .resolve()
+        )
 
-        if (
-            not math.isfinite(pf_minimum_error)
-            or pf_minimum_error <= 0.0
-        ):
-            raise ValueError(
-                "pf_minimum_error_std_m3s must be "
-                "finite and positive."
-            )
-        if not math.isfinite(minimum_error) or minimum_error <= 0.0:
-            raise ValueError(
-                "minimum_error_std_m3s must be finite and positive."
-            )
-        if not math.isfinite(relative_error) or relative_error < 0.0:
-            raise ValueError(
-                "relative_error_floor must be finite and nonnegative."
-            )
-        if not math.isfinite(regularization) or regularization < 0.0:
-            raise ValueError(
-                "covariance_regularization_fraction must be finite "
-                "and nonnegative."
-            )
+        root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
-        if prior_weights is None:
-            weights = np.full(
-                len(ids),
-                1.0 / len(ids),
-                dtype=np.float64,
-            )
-        else:
-            weights = np.asarray(
-                prior_weights,
-                dtype=np.float64,
-            )
-            if weights.shape != (len(ids),):
-                raise ValueError(
-                    "prior_weights must contain one value per member."
-                )
-            if not np.isfinite(weights).all() or np.any(weights < 0.0):
-                raise ValueError(
-                    "prior_weights must be finite and nonnegative."
-                )
-            total = float(np.sum(weights))
-            if total <= 0.0:
-                raise ValueError(
-                    "prior_weights must have positive total mass."
-                )
-            weights = weights / total
+        member_count = len(ids)
 
-        root = Path(output_root).expanduser().resolve()
-        root.mkdir(parents=True, exist_ok=True)
+        #
+        # Complete SIR starts from an exchangeable ensemble.
+        # There is no persistent user-supplied SIS prior.
+        #
+        uniform_weights = np.full(
+            member_count,
+            1.0 / member_count,
+            dtype=np.float64,
+        )
 
         self._member_ids = ids
         self._root = root
+
         self._posterior_weights = _readonly(
-            weights,
+            uniform_weights,
             dtype=np.float64,
         )
-        self._pf_observation_relative_error = (
-            pf_observation_error
-        )
-        self._pf_prediction_relative_error = (
-            pf_prediction_error
-        )
-        self._pf_minimum_error_std_m3s = (
-            pf_minimum_error
-        )
-        self._pf_random_seed = resolved_pf_random_seed
 
-        self._resampling_threshold = threshold
-        self._force_resampling = bool(force_resampling)
-        self._minimum_error = minimum_error
-        self._relative_error = relative_error
+        self._pf_random_seed = (
+            resolved_pf_random_seed
+        )
+
+        #
+        # RoutingPosteriorQlat.error_std remains a diagnostic
+        # contract requiring strictly positive values.
+        #
+        # It is NOT part of the SAC-SMA density-ratio likelihood.
+        # Use a fixed numerical floor rather than a hydrologic/PF
+        # tuning parameter.
+        #
+        self._diagnostic_error_floor = float(
+            np.finfo(
+                np.float64
+            ).eps
+        )
+
         self._regularization = regularization
-        self._enabled = bool(enabled) and len(ids) >= 2
-        self._source_cycles: list[CycleWindow] = []
+
+        self._enabled = (
+            bool(enabled)
+            and
+            member_count >= 2
+        )
+
+        self._source_cycles: list[
+            CycleWindow
+        ] = []
 
     @property
     def enabled(self) -> bool:
@@ -225,20 +194,6 @@ class RunoffPFBinding:
     def member_ids(self) -> tuple[str, ...]:
         return self._member_ids
 
-
-    @property
-    def pf_observation_relative_error(self) -> float:
-        return float(self._pf_observation_relative_error)
-
-
-    @property
-    def pf_prediction_relative_error(self) -> float:
-        return float(self._pf_prediction_relative_error)
-
-
-    @property
-    def pf_minimum_error_std_m3s(self) -> float:
-        return float(self._pf_minimum_error_std_m3s)
 
     @property
     def source_cycles(self) -> tuple[CycleWindow, ...]:
@@ -575,82 +530,63 @@ class RunoffPFBinding:
             ddof=1,
         )
 
+        diagnostic_floor = float(
+            self._diagnostic_error_floor
+        )
+
         routing_error_std = np.maximum(
             spread,
-            np.maximum(
-                np.abs(values)
-                * self._relative_error,
-                self._minimum_error,
-            ),
+            diagnostic_floor,
         )
 
-        # The public PF uncertainty controls are specified in routed
-        # discharge units. Propagate their independent variances through
-        # the same linear regression gain that maps routed-discharge
-        # increments into qlat space:
         #
-        #   Var(e_qlat,j)
-        #       = sum_k gain[j, k]^2 Var(e_Q,k)
+        # Preserve the numerical effect of the formerly neutralized
+        # pseudo-observation error controls without retaining them as
+        # tunable PF parameters.
         #
-        # Observation and prediction errors are treated as independent.
-        # The configured minimum is therefore applied in discharge space,
-        # never directly as an absolute qlat likelihood floor.
-        forecast_discharge_mean = np.mean(
-            forecast_discharge,
-            axis=0,
+        # In the certified SAC-SIR path those controls were:
+        #
+        #   observation-side relative contribution = zero
+        #   prediction-side relative contribution = zero
+        #   minimum_error_std           = machine epsilon
+        #
+        # Therefore the only surviving term was a numerical positive
+        # discharge-space floor. Propagate that same numerical floor
+        # through the routing->qlat gain solely for the diagnostic
+        # RoutingPosteriorQlat.error_std field.
+        #
+        discharge_error_variance = np.full(
+            forecast_discharge.shape[1],
+            diagnostic_floor**2,
+            dtype=np.float64,
         )
 
-        posterior_discharge_mean = np.mean(
-            posterior_discharge,
-            axis=0,
-        )
-
-        observation_error_std_m3s = np.maximum(
-            np.abs(
-                posterior_discharge_mean
-            )
-            * self._pf_observation_relative_error,
-            self._pf_minimum_error_std_m3s,
-        )
-
-        prediction_error_std_m3s = (
-            np.abs(
-                forecast_discharge_mean
-            )
-            * self._pf_prediction_relative_error
-        )
-
-        discharge_error_variance = (
+        projected_diagnostic_error_variance = np.maximum(
             np.square(
-                observation_error_std_m3s
+                gain
             )
-            + np.square(
-                prediction_error_std_m3s
-            )
-        )
-
-        projected_pf_error_variance = np.maximum(
-            np.square(gain)
-            @ discharge_error_variance,
+            @
+            discharge_error_variance,
             0.0,
         )
 
-        projected_pf_error_std = np.sqrt(
-            projected_pf_error_variance
+        projected_diagnostic_error_std = np.sqrt(
+            projected_diagnostic_error_variance
         )
 
         errors = np.sqrt(
             np.square(
                 routing_error_std
             )
-            + np.square(
-                projected_pf_error_std
+            +
+            np.square(
+                projected_diagnostic_error_std
             )
         )
 
         errors = np.maximum(
             errors,
-            self._minimum_error,
+            diagnostic_floor,
         )
 
         if not np.isfinite(errors).all():

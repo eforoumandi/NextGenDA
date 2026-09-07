@@ -508,37 +508,12 @@ class SidecarSACSMAPFBinding(
         covariance_regularization_fraction: float = 1.0e-12,
         enabled: bool = True,
     ) -> None:
-        """Initialize SAC-SMA using generic runoff-PF state."""
-
-        # Generic RunoffPFBinding also supports the historical
-        # pseudo-observation/SIS formulation. SAC-SIR does not.
-        #
-        # Neutral values are supplied only because the shared
-        # routing->qlat regression helper returns a diagnostic
-        # RoutingPosteriorQlat.error_std field. These values do
-        # not enter the SAC-SIR density-ratio weights.
-        numerical_epsilon = float(
-            np.finfo(
-                np.float64
-            ).eps
-        )
+        """Initialize SAC-SMA Block-SIR runoff assimilation."""
 
         super().__init__(
             member_ids,
             output_root,
-            prior_weights=None,
-            resampling_threshold_fraction=1.0,
-            force_resampling=False,
-            pf_observation_relative_error=0.0,
-            pf_prediction_relative_error=0.0,
-            pf_minimum_error_std_m3s=(
-                numerical_epsilon
-            ),
             pf_random_seed=pf_random_seed,
-            minimum_error_std_m3s=(
-                numerical_epsilon
-            ),
-            relative_error_floor=0.0,
             covariance_regularization_fraction=(
                 covariance_regularization_fraction
             ),
@@ -1438,7 +1413,7 @@ class SidecarSACSMAPFBinding(
 
             error_std=np.maximum(
                 final_spread,
-                self._minimum_error,
+                self._diagnostic_error_floor,
             ),
         )
 

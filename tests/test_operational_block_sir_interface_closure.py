@@ -6,10 +6,6 @@ import json
 
 import ngiab_da.integration.stepwise_troute_sidecar as stepwise_module
 
-from ngiab_da.integration.runoff_pf_binding import (
-    RunoffPFBinding,
-)
-
 from ngiab_da.integration.sacsma_pf_binding import (
     SidecarSACSMAPFBinding,
 )
@@ -23,7 +19,6 @@ from ngiab_da.integration.transparent_run import (
 )
 
 from ngiab_da.runtime.pf_resampling import (
-    BaselinePFResampler,
     SIRPFResampler,
 )
 
@@ -82,28 +77,6 @@ def test_sac_sir_public_constructor_has_no_retired_controls():
         "covariance_regularization_fraction"
         in names
     )
-
-
-def test_generic_pf_interface_is_preserved():
-
-    resampler = parameters(
-        BaselinePFResampler.plan
-    )
-
-    binding = parameters(
-        RunoffPFBinding.__init__
-    )
-
-    assert "force" in resampler
-
-    assert "prior_weights" in binding
-
-    assert (
-        "resampling_threshold_fraction"
-        in binding
-    )
-
-    assert "force_resampling" in binding
 
 
 def test_stepwise_public_interface_has_no_retired_sac_controls():
@@ -386,4 +359,29 @@ def test_interactive_writer_has_no_retired_sac_fields():
     assert (
         "pf_minimum_error_std_m3s"
         not in names
+    )
+
+def test_retired_generic_pf_interface_is_absent():
+
+    import ngiab_da.filters as filters_module
+    import ngiab_da.runtime.pf_resampling as resampling_module
+
+    assert not hasattr(
+        filters_module,
+        "ParticleFilter",
+    )
+
+    assert not hasattr(
+        filters_module,
+        "ParticleFilterResult",
+    )
+
+    assert not hasattr(
+        resampling_module,
+        "BaselinePFResampler",
+    )
+
+    assert hasattr(
+        resampling_module,
+        "SIRPFResampler",
     )

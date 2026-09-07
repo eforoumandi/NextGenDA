@@ -738,12 +738,6 @@ def test_runtime_builder_override_end_to_end(
     ] is None
 
 
-
-
-
-
-
-
     assert (
         request.runtime_window_kwargs[
             "precip_temperature_correlation"
@@ -845,25 +839,6 @@ def test_no_v3_model_environment_self_reference():
 
     assert (
         "adapter.runtime_environment()"
-        in
-        source
-    )
-
-
-def test_ess_threshold_scales_with_n():
-
-    from ngiab_da.filters.particle import (
-        ParticleFilter,
-    )
-
-
-    source = inspect.getsource(
-        ParticleFilter
-    )
-
-
-    assert (
-        "self.ess_threshold_fraction * member_count"
         in
         source
     )
