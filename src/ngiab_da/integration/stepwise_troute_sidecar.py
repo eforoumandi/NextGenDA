@@ -1177,7 +1177,7 @@ class PersistentTRouteEnsembleAnalyzer:
         )
 
     @staticmethod
-    def _identity_cfe_states(
+    def _identity_catchment_states(
         requests: Sequence[Mapping[str, Any]],
         member_ids: Sequence[str],
     ) -> dict[str, list[dict[str, Any]]]:
@@ -2077,7 +2077,7 @@ class PersistentTRouteEnsembleAnalyzer:
                     .analysis_states_by_member
                 )
 
-            return self._identity_cfe_states(
+            return self._identity_catchment_states(
                 prepared_state_requests,
                 self._member_ids,
             )
