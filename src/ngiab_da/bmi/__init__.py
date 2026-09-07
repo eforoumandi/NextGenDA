@@ -2,8 +2,6 @@
 
 from ngiab_da.bmi.state import (
     BmiArrayModel,
-    CFEStateAdapter,
-    CFEStateSnapshot,
     StateAdapterError,
     TRouteWarmState,
     TRouteWarmStateAdapter,
@@ -11,8 +9,6 @@ from ngiab_da.bmi.state import (
 
 __all__ = [
     "BmiArrayModel",
-    "CFEStateAdapter",
-    "CFEStateSnapshot",
     "StateAdapterError",
     "TRouteWarmState",
     "TRouteWarmStateAdapter",

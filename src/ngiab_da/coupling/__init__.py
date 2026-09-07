@@ -3,8 +3,6 @@
 from ngiab_da.coupling.bmi_backends import (
     BmiAnalysisApplyError,
     BmiAnalysisBackendError,
-    CFEEnsembleAnalysisBackend,
-    ParticleAncestryAdapter,
     TRouteEnsembleAnalysisBackend,
 )
 from ngiab_da.coupling.dual_filter import (
@@ -21,9 +19,7 @@ from ngiab_da.coupling.dual_filter import (
 __all__ = [
     "BmiAnalysisApplyError",
     "BmiAnalysisBackendError",
-    "CFEEnsembleAnalysisBackend",
     "DualFilterAssimilationHooks",
-    "ParticleAncestryAdapter",
     "RoutingAnalysisBackend",
     "RoutingAnalysisOutcome",
     "RoutingForecastEnsemble",
