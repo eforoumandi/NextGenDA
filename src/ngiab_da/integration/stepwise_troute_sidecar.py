@@ -7,8 +7,8 @@ persistent t-route BMI process per ensemble member, optionally assimilates
 time-aligned USGS discharge through the localized EnSRF, and checkpoints
 routing state before the NGen members are released.
 
-CFE state is returned unchanged in this initial real analyzer.  Hydrologic
-PF/replay coupling remains a separate capability gate.
+When runoff PF is enabled, SAC-SMA prognostic states are updated through
+block-local SIR ancestry applied in place before members continue.
 """
 
 from __future__ import annotations

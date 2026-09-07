@@ -128,7 +128,7 @@ class NgiabRunPackage:
             return "blocked_native_troute_nudging_enabled"
         # cfe_pf_compatible remains the conservative direct-runtime
         # compatibility flag.  The transparent wrapper now executes
-        # CFE PF through the validated native NextGen hook/replay path,
+        # CFE PF through the validated native NextGen hook path,
         # including realizations that require full NextGen execution.
         if self.cfe_present:
             return "cfe_pf_and_routing_ensrf"

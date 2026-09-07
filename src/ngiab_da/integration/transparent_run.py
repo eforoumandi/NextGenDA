@@ -3604,7 +3604,7 @@ def _parser() -> argparse.ArgumentParser:
         "--disable-cfe-pf",
         action="store_true",
         help=(
-            "Disable CFE particle-filter weighting and replay "
+            "Disable runoff particle-filter weighting "
             "while retaining routing EnSRF assimilation."
         ),
     )
