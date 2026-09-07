@@ -295,64 +295,6 @@ def _pull_image(
         )
 
 
-def _resolved_digest(
-    image: str,
-) -> str:
-    process = subprocess.run(
-        [
-            "docker",
-            "image",
-            "inspect",
-            image,
-            "--format",
-            "{{json .RepoDigests}}",
-        ],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    if process.returncode != 0:
-        raise BaselineRuntimeError(
-            f"Could not inspect Docker image {image!r}."
-        )
-
-    try:
-        values = json.loads(
-            process.stdout.strip()
-        )
-    except Exception as exc:
-        raise BaselineRuntimeError(
-            "Docker RepoDigests could not be parsed."
-        ) from exc
-
-    if not values:
-        raise BaselineRuntimeError(
-            f"Docker image {image!r} exposes no RepoDigest."
-        )
-
-    repository = image.rsplit(
-        ":",
-        1,
-    )[0]
-
-    for value in values:
-        value = str(
-            value
-        )
-
-        if value.startswith(
-            repository
-            + "@sha256:"
-        ):
-            return value
-
-    return str(
-        values[0]
-    )
-
-
 def _assert_ngen_serial(
     image_digest: str,
 ) -> None:

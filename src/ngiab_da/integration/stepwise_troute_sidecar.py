@@ -487,29 +487,6 @@ def _atomic_write_json(
             pass
 
 
-def _request_generation(
-    requests: Sequence[Mapping[str, Any]],
-) -> int:
-    # Return the one strict nonnegative member generation for a barrier.
-    values = []
-    for request in requests:
-        value = request.get("generation")
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise PersistentTRouteSidecarError(
-                "All members must provide an integer generation."
-            )
-        if value < 0:
-            raise PersistentTRouteSidecarError(
-                "Member generation must be nonnegative."
-            )
-        values.append(int(value))
-    if not values or len(set(values)) != 1:
-        raise PersistentTRouteSidecarError(
-            "All members must share one generation."
-        )
-    return values[0]
-
-
 def _load_assimilation_window(
     output_root: Path,
 ) -> tuple[int, int] | None:

@@ -117,28 +117,6 @@ def _write_value(
         ) from exc
 
 
-def _scalar_value(
-    model: BmiArrayModel,
-    name: str,
-) -> float:
-    values = _read_value(model, name, dtype=np.float64)
-
-    if values.size != 1:
-        raise StateAdapterError(
-            f"BMI variable {name!r} must be scalar; "
-            f"received shape {values.shape}."
-        )
-
-    value = float(values.reshape(-1)[0])
-
-    if not np.isfinite(value):
-        raise StateAdapterError(
-            f"BMI variable {name!r} must be finite."
-        )
-
-    return value
-
-
 @dataclass(frozen=True, slots=True)
 class TRouteWarmState:
     """t-route warm state ordered as segment, qu0, qd0, and h0."""

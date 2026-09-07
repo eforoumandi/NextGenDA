@@ -218,46 +218,6 @@ def _prompt_int(
         return value
 
 
-def _prompt_optional_int(
-    label: str,
-    *,
-    default: int | None,
-) -> int | None:
-
-    display = (
-        "none"
-        if default is None
-        else str(
-            default
-        )
-    )
-
-    while True:
-
-        raw = _prompt_text(
-            label,
-            default=display,
-        ).strip().lower()
-
-        if raw in {
-            "",
-            "none",
-            "null",
-        }:
-            return None
-
-        try:
-            return int(
-                raw
-            )
-
-        except ValueError:
-
-            print(
-                "Enter an integer or 'none'."
-            )
-
-
 def _prompt_float(
     label: str,
     *,
