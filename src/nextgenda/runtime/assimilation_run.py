@@ -65,12 +65,6 @@ FORCING_RANDOM_SEED = 12345
 
 TEMPERATURE_ERROR_STD_K = DEFAULT_PERTURBATION_CONFIG.temperature_sigma_k
 
-PF_OBSERVATION_RELATIVE_ERROR = 0.10
-
-PF_PREDICTION_RELATIVE_ERROR = 0.10
-
-PF_MINIMUM_ERROR_STD_M3S = 1.0e-8
-
 PF_RANDOM_SEED: int | None = None
 
 RUNTIME_TIMEOUT_SECONDS = 600.0
@@ -447,23 +441,12 @@ def _generic_runtime_kwargs(
         "forcing_random_seed":
             FORCING_RANDOM_SEED,
 
-        "pf_observation_relative_error":
-            PF_OBSERVATION_RELATIVE_ERROR,
-
-        "pf_prediction_relative_error":
-            PF_PREDICTION_RELATIVE_ERROR,
-
-        "pf_minimum_error_std":
-            PF_MINIMUM_ERROR_STD_M3S,
-
         "pf_random_seed":
             PF_RANDOM_SEED,
 
         "particle_filter_enabled":
             True,
 
-        "force_pf_resampling":
-            False,
     }
 
     if run_id is not None:
@@ -1040,7 +1023,10 @@ def _runtime_user_configuration_from_package(
         runtime_payload
         and runtime_payload.get(
             "schema_version"
-        ) != 1
+        ) not in {
+            1,
+            2,
+        }
     ):
 
         raise ProductionAssimilationError(
@@ -1146,25 +1132,6 @@ def _runtime_user_configuration_from_package(
     return {
         "observation_site_ids":
             configured_site_ids,
-
-        "pf_observation_relative_error":
-            finite_nonnegative(
-                "pf_observation_relative_error",
-                PF_OBSERVATION_RELATIVE_ERROR,
-            ),
-
-        "pf_prediction_relative_error":
-            finite_nonnegative(
-                "pf_prediction_relative_error",
-                PF_PREDICTION_RELATIVE_ERROR,
-            ),
-
-        "pf_minimum_error_std":
-            finite_nonnegative(
-                "pf_minimum_error_std_m3s",
-                PF_MINIMUM_ERROR_STD_M3S,
-                positive=True,
-            ),
 
         "forcing_random_seed":
             integer_seed(
@@ -1351,30 +1318,6 @@ def build_production_assimilation_request(
         kwargs[
             "observation_site_ids"
         ] = normalized_observation_site_ids
-
-    kwargs[
-        "pf_observation_relative_error"
-    ] = (
-        runtime_user_configuration[
-            "pf_observation_relative_error"
-        ]
-    )
-
-    kwargs[
-        "pf_prediction_relative_error"
-    ] = (
-        runtime_user_configuration[
-            "pf_prediction_relative_error"
-        ]
-    )
-
-    kwargs[
-        "pf_minimum_error_std"
-    ] = (
-        runtime_user_configuration[
-            "pf_minimum_error_std"
-        ]
-    )
 
     kwargs[
         "forcing_random_seed"

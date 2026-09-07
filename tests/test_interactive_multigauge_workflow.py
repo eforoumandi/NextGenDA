@@ -6,9 +6,6 @@ import pytest
 
 from nextgenda.runtime.assimilation_run import (
     FORCING_RANDOM_SEED,
-    PF_MINIMUM_ERROR_STD_M3S,
-    PF_OBSERVATION_RELATIVE_ERROR,
-    PF_PREDICTION_RELATIVE_ERROR,
     PF_RANDOM_SEED,
     ProductionAssimilationError,
     _runtime_user_configuration_from_package,
@@ -186,29 +183,8 @@ def test_legacy_runtime_contract_remains_single_gauge(
         )
     )
 
-    assert (
-        resolved[
-            "pf_observation_relative_error"
-        ]
-        ==
-        PF_OBSERVATION_RELATIVE_ERROR
-    )
 
-    assert (
-        resolved[
-            "pf_prediction_relative_error"
-        ]
-        ==
-        PF_PREDICTION_RELATIVE_ERROR
-    )
 
-    assert (
-        resolved[
-            "pf_minimum_error_std"
-        ]
-        ==
-        PF_MINIMUM_ERROR_STD_M3S
-    )
 
     assert (
         resolved[
@@ -300,29 +276,8 @@ def test_multigauge_runtime_contract_round_trip(
         )
     )
 
-    assert (
-        resolved[
-            "pf_observation_relative_error"
-        ]
-        ==
-        0.12
-    )
 
-    assert (
-        resolved[
-            "pf_prediction_relative_error"
-        ]
-        ==
-        0.16
-    )
 
-    assert (
-        resolved[
-            "pf_minimum_error_std"
-        ]
-        ==
-        0.001
-    )
 
     assert (
         resolved[

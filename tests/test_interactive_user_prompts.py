@@ -38,14 +38,6 @@ def test_requested_user_labels_exist():
             "Rainfall–runoff model state uncertainty "
             "(relative std of storage capacity)"
         ),
-        (
-            "Routing-derived pseudo observation uncertainty "
-            "(relative std)"
-        ),
-        (
-            "Rainfall–runoff model prediction uncertainty "
-            "(relative std)"
-        ),
         "Start preparing the NextGenDA package now?",
         "Run the configured data assimilation experiment now?",
     )
@@ -65,6 +57,14 @@ def test_removed_user_questions_are_absent():
         "SAC-SMA state temporal correlation [s]",
         "SAC-SMA perturbation truncation [sigma]",
         "PF minimum error standard deviation [m3/s]",
+        (
+            "Routing-derived pseudo observation uncertainty "
+            "(relative std)"
+        ),
+        (
+            "Rainfall–runoff model prediction uncertainty "
+            "(relative std)"
+        ),
         '"Forcing random seed"',
         '"PF random seed"',
     )
@@ -83,7 +83,6 @@ def test_removed_controls_still_have_internal_values():
         "run_id = None",
         "default.sacsma_state_correlation_seconds",
         "default.sacsma_state_truncation_sigma",
-        "PF_MINIMUM_ERROR_STD_M3S",
         "forcing_random_seed = 0",
         "pf_random_seed = 0",
     )

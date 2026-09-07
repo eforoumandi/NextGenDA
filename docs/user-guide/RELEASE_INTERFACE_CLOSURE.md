@@ -13,8 +13,6 @@ Classification: `PYTHON_MODULE_LAUNCH_AVAILABLE_BUT_CLI_CONVENIENCE_GAP`
 
 ## Interactive default symbols
 
-- `PF_OBSERVATION_RELATIVE_ERROR` → `0.1`
-- `PF_PREDICTION_RELATIVE_ERROR` → `0.1`
 
 ## Parameter reachability
 
@@ -24,9 +22,6 @@ Classification: `PYTHON_MODULE_LAUNCH_AVAILABLE_BUT_CLI_CONVENIENCE_GAP`
 | `forcing_phi` | `DIRECTLY_PROMPTED` |
 | `forcing_random_seed` | `REFERENCED_OR_PERSISTED_BUT_NOT_DIRECTLY_PROMPTED` |
 | `forcing_spatial_correlation` | `DIRECTLY_PROMPTED` |
-| `pf_minimum_error_std` | `REFERENCED_OR_PERSISTED_BUT_NOT_DIRECTLY_PROMPTED` |
-| `pf_observation_relative_error` | `DIRECTLY_PROMPTED` |
-| `pf_prediction_relative_error` | `DIRECTLY_PROMPTED` |
 | `pf_random_seed` | `REFERENCED_OR_PERSISTED_BUT_NOT_DIRECTLY_PROMPTED` |
 | `precip_temperature_correlation` | `DIRECTLY_PROMPTED` |
 | `precipitation_cv` | `DIRECTLY_PROMPTED` |
@@ -45,3 +40,18 @@ Classification: `PYTHON_MODULE_LAUNCH_AVAILABLE_BUT_CLI_CONVENIENCE_GAP`
 
 No scientific-source change is made by this audit. If a public UX patch is necessary, it must be applied only after the ongoing matched N=50 science experiment has released the current source freeze, and it must receive narrowly scoped interface validation without rerunning unaffected certified science.
 
+
+## SAC-SIR interface closure
+
+The covariance-aware SAC-SMA Block-SIR formulation does not expose
+the former pseudo-observation error, ESS-resampling-threshold, or
+forced-resampling controls. Those controls belonged to the previous
+diagonal/SIS-style runoff-PF formulation.
+
+Runtime configuration schema version 2 persists only active
+reproducibility controls. Historical schema-version-1 packages remain
+readable; legacy SAC-PF uncertainty fields are ignored rather than
+silently affecting the corrected Block-SIR mathematics.
+
+Generic non-SAC particle-filter components retain their own SIS/ESS
+controls where those controls remain mathematically applicable.

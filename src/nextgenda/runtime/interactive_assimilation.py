@@ -50,9 +50,6 @@ from nextgenda.ensemble.config import (
 
 from nextgenda.runtime.assimilation_run import (
     FORCING_RANDOM_SEED,
-    PF_MINIMUM_ERROR_STD_M3S,
-    PF_OBSERVATION_RELATIVE_ERROR,
-    PF_PREDICTION_RELATIVE_ERROR,
     PF_RANDOM_SEED,
     run_production_assimilation,
 )
@@ -947,10 +944,22 @@ def discover_available_upstream_gauges(
         )
 
     target_observations = tuple(
-        binding.provider.fetch(
+        observation
+        for observation
+        in binding.provider.fetch(
             target_stream,
             observation_start,
             observation_end,
+        )
+        if (
+            observation.is_usable
+            and float(
+                getattr(
+                    observation,
+                    "quality_weight",
+                    1.0,
+                )
+            ) > 0.0
         )
     )
 
@@ -985,10 +994,22 @@ def discover_available_upstream_gauges(
         try:
 
             observations = tuple(
-                binding.provider.fetch(
+                observation
+                for observation
+                in binding.provider.fetch(
                     stream,
                     observation_start,
                     observation_end,
+                )
+                if (
+                    observation.is_usable
+                    and float(
+                        getattr(
+                            observation,
+                            "quality_weight",
+                            1.0,
+                        )
+                    ) > 0.0
                 )
             )
 
@@ -1296,9 +1317,6 @@ def _write_user_contract(
         UpstreamGaugeCandidate
     ],
     configured_site_ids: Sequence[str],
-    pf_observation_relative_error: float,
-    pf_prediction_relative_error: float,
-    pf_minimum_error_std_m3s: float,
     forcing_random_seed: int,
     pf_random_seed: int | None,
 ) -> Path:
@@ -1400,22 +1418,7 @@ def _write_user_contract(
         "assimilation_runtime_configuration"
     ] = {
         "schema_version":
-            1,
-
-        "pf_observation_relative_error":
-            float(
-                pf_observation_relative_error
-            ),
-
-        "pf_prediction_relative_error":
-            float(
-                pf_prediction_relative_error
-            ),
-
-        "pf_minimum_error_std_m3s":
-            float(
-                pf_minimum_error_std_m3s
-            ),
+            2,
 
         "forcing_random_seed":
             int(
@@ -1740,31 +1743,6 @@ def main() -> int:
     )
 
     print()
-    print(
-        "--- Particle-filter uncertainty ---"
-    )
-
-    pf_observation_relative_error = _prompt_float(
-        "Routing-derived pseudo observation uncertainty (relative std)",
-        default=PF_OBSERVATION_RELATIVE_ERROR,
-        minimum=0.0,
-    )
-
-    pf_prediction_relative_error = _prompt_float(
-        "Rainfall–runoff model prediction uncertainty (relative std)",
-        default=PF_PREDICTION_RELATIVE_ERROR,
-        minimum=0.0,
-    )
-
-    #
-    # Fixed internal PF numerical safeguard.
-    #
-    pf_minimum_error_std = (
-        PF_MINIMUM_ERROR_STD_M3S
-    )
-
-    print()
-
 
     #
     # Fixed reproducibility policy for new interactive packages.
@@ -1851,14 +1829,8 @@ def main() -> int:
             .to_contract_payload(),
 
         "assimilation_runtime_configuration": {
-            "pf_observation_relative_error":
-                pf_observation_relative_error,
-
-            "pf_prediction_relative_error":
-                pf_prediction_relative_error,
-
-            "pf_minimum_error_std_m3s":
-                pf_minimum_error_std,
+            "schema_version":
+                2,
 
             "forcing_random_seed":
                 forcing_random_seed,
@@ -1981,17 +1953,8 @@ def main() -> int:
             downstream_gauge,
         ),
 
-        pf_observation_relative_error=(
-            pf_observation_relative_error
-        ),
 
-        pf_prediction_relative_error=(
-            pf_prediction_relative_error
-        ),
 
-        pf_minimum_error_std_m3s=(
-            pf_minimum_error_std
-        ),
 
         forcing_random_seed=(
             forcing_random_seed
@@ -2121,17 +2084,8 @@ def main() -> int:
                 configured_site_ids
             ),
 
-            pf_observation_relative_error=(
-                pf_observation_relative_error
-            ),
 
-            pf_prediction_relative_error=(
-                pf_prediction_relative_error
-            ),
 
-            pf_minimum_error_std_m3s=(
-                pf_minimum_error_std
-            ),
 
             forcing_random_seed=(
                 forcing_random_seed

@@ -572,6 +572,15 @@ class UsgsOgcContinuousProvider:
                 approval,
                 qualifiers,
             ),
+            # Direct USGS OGC does not provide the NWM-preprocessed
+            # discharge_quality field. Non-blocked direct-USGS records
+            # therefore retain unit quality influence. An operational
+            # NWM-compatible provider must supply discharge_quality/100.
+            quality_weight=(
+                0.0
+                if blocked
+                else 1.0
+            ),
             is_usable=not blocked,
         )
         return observation, series_id.strip()

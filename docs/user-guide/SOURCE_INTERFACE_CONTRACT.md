@@ -77,7 +77,6 @@ Select upstream gauges (none/all/list numbers/gauge IDs): `
 | `forcing_spatial_correlation` | 35 |
 | `pf_minimum_std` | 0 |
 | `pf_obs_relative_error` | 0 |
-| `pf_prediction_relative_error` | 43 |
 | `pf_seed` | 0 |
 | `precip_temperature_correlation` | 61 |
 | `precipitation_cv` | 36 |
@@ -102,13 +101,6 @@ Select upstream gauges (none/all/list numbers/gauge IDs): `
 - `forcing_spatial_correlation` = `0.27` — `src/nextgenda/ensemble/config.py:81`
 - `forcing_spatial_correlation` = `_prompt_float('Spatial correlation of forcing errors', default=default.forcing_spatial_correlation, minimum=0.0, maximum=1.0, minimum_inclusive=False, maximum_inclusive=False)` — `src/nextgenda/runtime/interactive_assimilation.py:1699`
 - `forcing_spatial_correlation` = `0.2` — `src/ngiab_da/integration/transparent_run.py:3156`
-- `pf_prediction_relative_error` = `_prompt_float('Rainfall–runoff model prediction uncertainty (relative std)', default=PF_PREDICTION_RELATIVE_ERROR, minimum=0.0)` — `src/nextgenda/runtime/interactive_assimilation.py:1750`
-- `pf_prediction_relative_error` = `0.1` — `src/ngiab_da/integration/runoff_pf_binding.py:62`
-- `pf_prediction_relative_error` = `0.1` — `src/ngiab_da/integration/sacsma_pf_binding.py:895`
-- `pf_prediction_relative_error` = `0.1` — `src/ngiab_da/integration/stepwise_troute_sidecar.py:724`
-- `pf_prediction_relative_error` = `0.1` — `src/ngiab_da/integration/transparent_run.py:1629`
-- `pf_prediction_relative_error` = `0.1` — `src/ngiab_da/integration/transparent_run.py:3156`
-- `pf_prediction_relative_error` = `float(pf_prediction_relative_error)` — `src/ngiab_da/integration/transparent_run.py:3314`
 - `precip_temperature_correlation` = `-0.1` — `src/nextgenda/ensemble/config.py:83`
 - `precip_temperature_correlation` = `-0.1` — `src/nextgenda/forcing/package_provisioning.py:887`
 - `precip_temperature_correlation` = `_prompt_float('Correlation between precipitation and temperature errors', default=default.precip_temperature_correlation, minimum=-1.0, maximum=1.0, minimum_inclusive=False, maximum_inclusive=False)` — `src/nextgenda/runtime/interactive_assimilation.py:1708`
@@ -145,3 +137,18 @@ Select upstream gauges (none/all/list numbers/gauge IDs): `
 
 The final beginner guide must be derived from this contract and the completed matched-N50 science acceptance. User-facing commands must not invent option names or defaults that are absent from the frozen release source.
 
+
+## SAC-SIR interface closure
+
+The covariance-aware SAC-SMA Block-SIR formulation does not expose
+the former pseudo-observation error, ESS-resampling-threshold, or
+forced-resampling controls. Those controls belonged to the previous
+diagonal/SIS-style runoff-PF formulation.
+
+Runtime configuration schema version 2 persists only active
+reproducibility controls. Historical schema-version-1 packages remain
+readable; legacy SAC-PF uncertainty fields are ignored rather than
+silently affecting the corrected Block-SIR mathematics.
+
+Generic non-SAC particle-filter components retain their own SIS/ESS
+controls where those controls remain mathematically applicable.

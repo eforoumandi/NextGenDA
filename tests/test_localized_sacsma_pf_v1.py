@@ -18,120 +18,20 @@ from ngiab_da.integration.sacsma_lis_gmao_state_perturbation import (
 from ngiab_da.integration.sacsma_pf_binding import (
     SACSMA_REQUEST_KIND,
     SidecarSACSMAPFBinding,
-    _lis_style_current_cycle_gaussian_weights,
 )
+# NOTE: The former V1 diagonal current-cycle SAC-SMA likelihood tests were
+# retired by the operational Block-SIR science correction. The replacement
+# reduced-rank density-ratio likelihood and its invariants are certified in
+# tests/test_operational_block_sir_v2.py.
+#
 from ngiab_da.integration.stepwise_troute_sidecar import (
     PersistentTRouteSidecarError,
     _single_gauge_sacsma_pf_localization,
 )
 
 
-def test_localized_likelihood_zero_weight_is_exactly_neutral() -> None:
-
-    predicted = np.asarray(
-        [
-            [1.0, 100.0],
-            [2.0, -500.0],
-            [3.0, 900.0],
-        ],
-        dtype=np.float64,
-    )
-
-    observations = np.asarray(
-        [2.1, 10000.0],
-        dtype=np.float64,
-    )
-
-    sigma = np.asarray(
-        [0.5, 0.01],
-        dtype=np.float64,
-    )
-
-    localized = (
-        _lis_style_current_cycle_gaussian_weights(
-            predicted,
-            observations,
-            sigma,
-            localization_weights=np.asarray(
-                [1.0, 0.0],
-                dtype=np.float64,
-            ),
-        )
-    )
-
-    reference = (
-        _lis_style_current_cycle_gaussian_weights(
-            predicted[
-                :,
-                :1,
-            ],
-            observations[
-                :1
-            ],
-            sigma[
-                :1
-            ],
-        )
-    )
-
-    np.testing.assert_allclose(
-        localized.weights,
-        reference.weights,
-        rtol=0.0,
-        atol=1.0e-15,
-    )
 
 
-def test_all_one_likelihood_localization_preserves_legacy_exactly() -> None:
-
-    predicted = np.asarray(
-        [
-            [1.0, 2.0, 3.0],
-            [1.5, 2.5, 2.8],
-            [0.8, 2.2, 3.4],
-        ],
-        dtype=np.float64,
-    )
-
-    observed = np.asarray(
-        [1.2, 2.3, 3.1],
-        dtype=np.float64,
-    )
-
-    sigma = np.asarray(
-        [0.2, 0.3, 0.4],
-        dtype=np.float64,
-    )
-
-    legacy = (
-        _lis_style_current_cycle_gaussian_weights(
-            predicted,
-            observed,
-            sigma,
-        )
-    )
-
-    localized = (
-        _lis_style_current_cycle_gaussian_weights(
-            predicted,
-            observed,
-            sigma,
-            localization_weights=np.ones(
-                3,
-                dtype=np.float64,
-            ),
-        )
-    )
-
-    np.testing.assert_array_equal(
-        localized.weights,
-        legacy.weights,
-    )
-
-    np.testing.assert_array_equal(
-        localized.log_likelihood,
-        legacy.log_likelihood,
-    )
 
 
 def _runoff_binding_for_regression() -> RunoffPFBinding:

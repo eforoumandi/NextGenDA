@@ -130,7 +130,12 @@ class HistoricalObservationCacheProvider:
         return tuple(
             stream
             for stream in self._streams
-            if self._records.get(stream.key, ())
+            if any(
+                record.is_usable
+                and record.quality_weight > 0.0
+                for record
+                in self._records.get(stream.key, ())
+            )
         )
 
     @property
@@ -138,7 +143,12 @@ class HistoricalObservationCacheProvider:
         return tuple(
             stream
             for stream in self._streams
-            if not self._records.get(stream.key, ())
+            if not any(
+                record.is_usable
+                and record.quality_weight > 0.0
+                for record
+                in self._records.get(stream.key, ())
+            )
         )
 
     def _csv_path(self, stream: ObservationStream) -> Path:
@@ -160,6 +170,7 @@ class HistoricalObservationCacheProvider:
                 "error_stddev_cms",
                 "observation_id",
                 "quality_code",
+                "quality_weight",
                 "is_usable",
             ]
         ]
@@ -172,6 +183,7 @@ class HistoricalObservationCacheProvider:
                     format(record.error_stddev_cms, ".17g"),
                     record.observation_id,
                     record.quality_code,
+                    format(record.quality_weight, ".17g"),
                     "1" if record.is_usable else "0",
                 ]
             )
@@ -209,10 +221,21 @@ class HistoricalObservationCacheProvider:
         for stream in self._streams:
             records = self._records.get(stream.key, ())
 
+            usable_records = tuple(
+                record
+                for record in records
+                if (
+                    record.is_usable
+                    and record.quality_weight > 0.0
+                )
+            )
+
             if stream.key in failed_keys:
                 status = "provider_failed"
-            elif records:
+            elif usable_records:
                 status = "active"
+            elif records:
+                status = "inactive_no_usable_records"
             else:
                 status = "inactive_no_records"
 
@@ -223,6 +246,9 @@ class HistoricalObservationCacheProvider:
                     "variable": stream.variable,
                     "status": status,
                     "record_count": len(records),
+                    "usable_record_count": len(
+                        usable_records
+                    ),
                     "csv_path": (
                         str(self._csv_path(stream))
                         if records

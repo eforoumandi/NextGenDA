@@ -85,6 +85,7 @@ class DischargeObservation:
     error_stddev_cms: float
     observation_id: str
     quality_code: str = "unknown"
+    quality_weight: float = 1.0
     is_usable: bool = True
 
     def __post_init__(self) -> None:
@@ -97,6 +98,7 @@ class DischargeObservation:
         )
         value = float(self.value_cms)
         error = float(self.error_stddev_cms)
+        quality_weight = float(self.quality_weight)
 
         if not np.isfinite(value):
             raise ValueError(
@@ -109,12 +111,26 @@ class DischargeObservation:
                 "and positive."
             )
 
+        if (
+            not np.isfinite(quality_weight)
+            or quality_weight < 0.0
+            or quality_weight > 1.0
+        ):
+            raise ValueError(
+                "quality_weight must be finite and lie in [0, 1]."
+            )
+
         if not isinstance(self.is_usable, bool):
             raise TypeError("is_usable must be a bool.")
 
         object.__setattr__(self, "observed_at", observed_at)
         object.__setattr__(self, "value_cms", value)
         object.__setattr__(self, "error_stddev_cms", error)
+        object.__setattr__(
+            self,
+            "quality_weight",
+            quality_weight,
+        )
         object.__setattr__(
             self,
             "observation_id",
@@ -190,6 +206,7 @@ class DischargeObservation:
                 format(self.value_cms, ".17g"),
                 format(self.error_stddev_cms, ".17g"),
                 self.quality_code,
+                format(self.quality_weight, ".17g"),
                 "1" if self.is_usable else "0",
             )
         )
@@ -436,7 +453,10 @@ class IncrementalObservationBroker:
                         "wrong stream."
                     )
 
-                if not observation.is_usable:
+                if (
+                    not observation.is_usable
+                    or observation.quality_weight <= 0.0
+                ):
                     continue
 
                 if not (

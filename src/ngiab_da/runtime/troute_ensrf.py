@@ -174,6 +174,7 @@ class BaselineTRouteLocalizedEnSRF:
         *,
         observations: Mapping[str, float],
         error_std: Mapping[str, float],
+        quality_weights: Mapping[str, float] | None = None,
     ) -> TRouteLocalizedEnSRFOutcome:
         """Assimilate routing discharge and transactionally apply analyzed q0."""
 
@@ -195,6 +196,64 @@ class BaselineTRouteLocalizedEnSRF:
             [float(error_std[gage_id]) for gage_id in gage_ids],
             dtype=np.float64,
         )
+
+        if quality_weights is None:
+
+            observation_quality = np.ones(
+                len(
+                    gage_ids
+                ),
+                dtype=np.float64,
+            )
+
+        else:
+
+            if (
+                set(
+                    gage_ids
+                )
+                !=
+                set(
+                    str(key)
+                    for key
+                    in quality_weights
+                )
+            ):
+                raise TRouteEnSRFAnalysisError(
+                    "Observation quality mapping must "
+                    "use the same gage IDs."
+                )
+
+            observation_quality = np.asarray(
+                [
+                    float(
+                        quality_weights[
+                            gage_id
+                        ]
+                    )
+                    for gage_id
+                    in gage_ids
+                ],
+                dtype=np.float64,
+            )
+
+            if (
+                not np.isfinite(
+                    observation_quality
+                ).all()
+                or np.any(
+                    observation_quality
+                    < 0.0
+                )
+                or np.any(
+                    observation_quality
+                    > 1.0
+                )
+            ):
+                raise TRouteEnSRFAnalysisError(
+                    "Observation quality weights "
+                    "must lie in [0, 1]."
+                )
 
         if not np.isfinite(observation_values).all():
             raise TRouteEnSRFAnalysisError(
@@ -230,6 +289,29 @@ class BaselineTRouteLocalizedEnSRF:
         observation_localization = self._observation_localization(
             forecast,
             gage_ids,
+        )
+
+        # Source quality is kept distinct from the physical
+        # observation-error variance R. It acts as an additional
+        # deterministic EnSRF influence taper, analogous to the
+        # explicit observation-quality coefficient used by NWM
+        # streamflow DA.
+        state_localization = (
+            state_localization
+            *
+            observation_quality[
+                :,
+                np.newaxis,
+            ]
+        )
+
+        observation_localization = (
+            observation_localization
+            *
+            observation_quality[
+                :,
+                np.newaxis,
+            ]
         )
 
         result = self._filter.update(

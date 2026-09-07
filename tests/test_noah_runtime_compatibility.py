@@ -242,5 +242,102 @@ class NoahRuntimeCompatibilityTests(
                 )
 
 
+    def test_repository_ships_validated_v25_sacsma_legacy_noah_profile(
+        self,
+    ):
+        repository = (
+            Path(
+                __file__
+            )
+            .resolve()
+            .parents[
+                1
+            ]
+        )
+
+        config = (
+            repository
+            / "configs"
+            / "runtime_compatibility.json"
+        )
+
+        self.assertTrue(
+            config.is_file()
+        )
+
+        payload = json.loads(
+            config.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(
+            payload.get(
+                "schema_version"
+            ),
+            1,
+        )
+
+        profile = (
+            payload[
+                "profiles"
+            ][
+                "v25_sacsma_legacy_noah"
+            ]
+        )
+
+        self.assertEqual(
+            profile[
+                "image_reference"
+            ],
+            (
+                "awiciroh/ciroh-ngen-image@sha256:"
+                "bd79dc19728d04293920957b2b9880614666dc3ca6231fac9741df4a3c76a1b1"
+            ),
+        )
+
+        transformations = profile[
+            "transformations"
+        ]
+
+        required = {
+            "stomatal_resistance_option": {
+                "prepared_value":
+                    4,
+
+                "runtime_value":
+                    1,
+            },
+
+            "evap_srfc_resistance_option": {
+                "prepared_value":
+                    5,
+
+                "runtime_value":
+                    4,
+            },
+        }
+
+        for option, expected in required.items():
+
+            self.assertIn(
+                option,
+                transformations,
+            )
+
+            specification = transformations[
+                option
+            ]
+
+            for key, expected_value in expected.items():
+
+                self.assertEqual(
+                    specification.get(
+                        key
+                    ),
+                    expected_value,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

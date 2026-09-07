@@ -17,7 +17,7 @@ The current SAC-SMA workflow combines:
 
 ## Certified execution environment
 
-The current production-science release is certified for:
+The current runtime- and execution-certified experimental DA release is supported for:
 
 - Linux AMD64, or
 - Windows 10/11 **through WSL2** with Docker Desktop.

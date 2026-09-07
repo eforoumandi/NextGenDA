@@ -1639,12 +1639,8 @@ def _launch_sidecar(
     observation_site_ids: Sequence[str] | None,
     max_requests: int | None,
     timeout_seconds: float,
-    pf_observation_relative_error: float = 0.10,
-    pf_prediction_relative_error: float = 0.10,
-    pf_minimum_error_std: float = 1.0,
     pf_random_seed: int | None = None,
     cfe_pf_enabled: bool = True,
-    force_pf_resampling: bool = False,
 ) -> tuple[subprocess.Popen[Any], Any, Any]:
     stdout_path = plan.workspace / "logs/sidecar.stdout.txt"
     stderr_path = plan.workspace / "logs/sidecar.stderr.txt"
@@ -1769,12 +1765,6 @@ def _launch_sidecar(
         "/workspace/da/routing",
         "--observation-mode",
         observation_mode,
-        "--pf-observation-relative-error",
-        str(pf_observation_relative_error),
-        "--pf-prediction-relative-error",
-        str(pf_prediction_relative_error),
-        "--pf-minimum-error-std",
-        str(pf_minimum_error_std),
         "--barrier-timeout",
         str(timeout_seconds),
         "--connection-timeout",
@@ -1810,10 +1800,6 @@ def _launch_sidecar(
                 str(max_requests),
             ]
         )
-
-
-    if force_pf_resampling:
-        command.append("--force-pf-resampling")
 
 
     process = subprocess.Popen(
@@ -3174,12 +3160,8 @@ def execute_transparent_run(
     validation_window_start_epoch_seconds: int | None = None,
     validation_window_end_epoch_seconds: int | None = None,
     preserve_simulation_window: bool = False,
-    pf_observation_relative_error: float = 0.10,
-    pf_prediction_relative_error: float = 0.10,
-    pf_minimum_error_std: float = 1.0,
     pf_random_seed: int | None = None,
     cfe_pf_enabled: bool = True,
-    force_pf_resampling: bool = False,
     spatial_operator_path: str | Path | None = None,
     spatial_operator_sha256: str | None = None,
     precip_temperature_correlation: float | None = None,
@@ -3297,26 +3279,12 @@ def execute_transparent_run(
 
     if timeout_seconds <= 0.0:
         raise ValueError("timeout_seconds must be positive.")
-    if not isinstance(force_pf_resampling, bool):
-        raise TypeError(
-            "force_pf_resampling must be a boolean."
-        )
     if not isinstance(cfe_pf_enabled, bool):
         raise TypeError(
             "cfe_pf_enabled must be a boolean."
         )
 
 
-
-    pf_observation_relative_error = float(
-        pf_observation_relative_error
-    )
-    pf_prediction_relative_error = float(
-        pf_prediction_relative_error
-    )
-    pf_minimum_error_std = float(
-        pf_minimum_error_std
-    )
 
     if pf_random_seed is not None:
         if isinstance(pf_random_seed, bool):
@@ -3328,33 +3296,6 @@ def execute_transparent_run(
             raise ValueError(
                 "pf_random_seed must be nonnegative."
             )
-
-    if (
-        not math.isfinite(pf_observation_relative_error)
-        or pf_observation_relative_error < 0.0
-    ):
-        raise ValueError(
-            "pf_observation_relative_error must be "
-            "finite and nonnegative."
-        )
-
-    if (
-        not math.isfinite(pf_prediction_relative_error)
-        or pf_prediction_relative_error < 0.0
-    ):
-        raise ValueError(
-            "pf_prediction_relative_error must be "
-            "finite and nonnegative."
-        )
-
-    if (
-        not math.isfinite(pf_minimum_error_std)
-        or pf_minimum_error_std <= 0.0
-    ):
-        raise ValueError(
-            "pf_minimum_error_std must be "
-            "finite and positive."
-        )
 
     validated_ensemble_size = _validated_ensemble_size(
         ensemble_size
@@ -3432,10 +3373,6 @@ def execute_transparent_run(
             ),
         )
 
-    if force_pf_resampling and not cfe_pf_enabled:
-        raise ValueError(
-            "force_pf_resampling requires CFE PF to be enabled."
-        )
     if plan.workspace.exists():
         raise TransparentRunError(
             f"Run workspace already exists: {plan.workspace}"
@@ -3656,18 +3593,8 @@ def execute_transparent_run(
                 cycle_count * len(plan.member_ids)
             ),
             timeout_seconds=timeout_seconds,
-            pf_observation_relative_error=(
-                pf_observation_relative_error
-            ),
-            pf_prediction_relative_error=(
-                pf_prediction_relative_error
-            ),
-            pf_minimum_error_std=(
-                pf_minimum_error_std
-            ),
             pf_random_seed=pf_random_seed,
             cfe_pf_enabled=cfe_pf_enabled,
-            force_pf_resampling=force_pf_resampling,
             observation_site_ids=observation_site_ids,
         )
         streams.extend((sidecar_stdout, sidecar_stderr))
@@ -3747,9 +3674,6 @@ def execute_transparent_run(
                         if final_status_plan.executed_capability
                         == "cfe_pf_and_routing_ensrf"
                         else "identity_routing_only"
-                    ),
-                    "force_pf_resampling": bool(
-                        force_pf_resampling
                     ),
                 },
             ),
@@ -3895,36 +3819,8 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
 
-    parser.add_argument(
-        "--pf-observation-relative-error",
-        type=float,
-        default=0.10,
-        help=(
-            "Particle-filter observation relative error Err used "
-            "by the MATLAB-compatible heteroscedastic weighting "
-            "(default: 0.10)."
-        ),
-    )
 
-    parser.add_argument(
-        "--pf-prediction-relative-error",
-        type=float,
-        default=0.10,
-        help=(
-            "Particle-filter prediction relative error Err2 used "
-            "to perturb Qdist (default: 0.10)."
-        ),
-    )
 
-    parser.add_argument(
-        "--pf-minimum-error-std",
-        type=float,
-        default=1.0,
-        help=(
-            "Minimum particle-filter likelihood error standard "
-            "deviation MinVar in m3/s (default: 1.0)."
-        ),
-    )
 
     parser.add_argument(
         "--pf-random-seed",
@@ -4001,11 +3897,6 @@ def _parser() -> argparse.ArgumentParser:
     )
 
 
-    parser.add_argument(
-        "--force-pf-resampling",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
 
     return parser
 
@@ -4083,21 +3974,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         normal_forcing_errors=normal_forcing_errors,
         additive_forcing_errors=additive_forcing_errors,
         forcing_random_seed=args.forcing_random_seed,
-        pf_observation_relative_error=(
-            args.pf_observation_relative_error
-        ),
-        pf_prediction_relative_error=(
-            args.pf_prediction_relative_error
-        ),
-        pf_minimum_error_std=(
-            args.pf_minimum_error_std
-        ),
         pf_random_seed=args.pf_random_seed,
         cfe_pf_enabled=(
             not args.disable_cfe_pf
-        ),
-        force_pf_resampling=(
-            args.force_pf_resampling
         ),
         observation_site_ids=args.observation_site_ids,
     )

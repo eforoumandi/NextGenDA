@@ -87,8 +87,6 @@ Resolve one USGS gauge to its routing flowpath, nexus, and local divide.
 | `forcing_spatial_correlation` | Spatial correlation of forcing errors | `default.forcing_spatial_correlation` |
 | `precip_temperature_correlation` | Correlation between precipitation and temperature errors | `default.precip_temperature_correlation` |
 | `state_std_fraction` | Rainfall–runoff model state uncertainty (relative std of storage capacity) | `default.sacsma_state_std_fraction` |
-| `pf_observation_relative_error` | Routing-derived pseudo observation uncertainty (relative std) | `PF_OBSERVATION_RELATIVE_ERROR` |
-| `pf_prediction_relative_error` | Rainfall–runoff model prediction uncertainty (relative std) | `PF_PREDICTION_RELATIVE_ERROR` |
 
 ## Authoritative public ensemble and perturbation defaults
 
@@ -112,3 +110,18 @@ _No matching module-level constants detected._
 
 Defaults appearing only in lower-level `ngiab_da` integration/runtime modules are implementation/context-specific fallbacks and must not be presented to users as competing public defaults unless the public interface explicitly selects them.
 
+
+## SAC-SIR interface closure
+
+The covariance-aware SAC-SMA Block-SIR formulation does not expose
+the former pseudo-observation error, ESS-resampling-threshold, or
+forced-resampling controls. Those controls belonged to the previous
+diagonal/SIS-style runoff-PF formulation.
+
+Runtime configuration schema version 2 persists only active
+reproducibility controls. Historical schema-version-1 packages remain
+readable; legacy SAC-PF uncertainty fields are ignored rather than
+silently affecting the corrected Block-SIR mathematics.
+
+Generic non-SAC particle-filter components retain their own SIS/ESS
+controls where those controls remain mathematically applicable.

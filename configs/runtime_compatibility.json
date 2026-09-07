@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "v25_sacsma_legacy_noah": {
+      "image_reference": "awiciroh/ciroh-ngen-image@sha256:bd79dc19728d04293920957b2b9880614666dc3ca6231fac9741df4a3c76a1b1",
+      "purpose": "V25-compatible SAC-SMA execution using legacy NOAH-OWP-M BMI bundled with the SAC-SMA-capable runtime",
+      "transformations": {
+        "stomatal_resistance_option": {
+          "prepared_value": 4,
+          "runtime_value": 1,
+          "runtime_allowed_min": 1,
+          "runtime_allowed_max": 3,
+          "v25_reference_value": 1
+        },
+        "evap_srfc_resistance_option": {
+          "prepared_value": 5,
+          "runtime_value": 4,
+          "runtime_allowed_min": 1,
+          "runtime_allowed_max": 4,
+          "v25_reference_value": 4
+        }
+      }
+    }
+  }
+}

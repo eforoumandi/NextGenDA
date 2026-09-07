@@ -733,11 +733,6 @@ class PersistentTRouteEnsembleAnalyzer:
         observation_site_ids: Sequence[str] | None = None,
         localization_cutoff_m: float = 100_000.0,
         cfe_pf_enabled: bool = True,
-        cfe_pf_force_resampling: bool = False,
-        cfe_pf_resampling_threshold_fraction: float = 0.5,
-        pf_observation_relative_error: float = 0.10,
-        pf_prediction_relative_error: float = 0.10,
-        pf_minimum_error_std_m3s: float = 1.0,
         pf_random_seed: int | None = None,
     ) -> None:
         members = tuple(str(value) for value in member_ids)
@@ -830,6 +825,28 @@ class PersistentTRouteEnsembleAnalyzer:
 
         observation_cache = None
 
+        # Preserve the explicit NextGenDA hydrologic serial order.
+        #
+        # The public interactive workflow supplies selected gauges as:
+        #
+        # farthest upstream -> ... -> downstream target.
+        #
+        # Do not later replace this order with lexicographic site-ID order.
+        requested_observation_order = (
+            None
+            if observation_site_ids is None
+            else tuple(
+                dict.fromkeys(
+                    str(value).strip()
+                    for value
+                    in observation_site_ids
+                    if str(value).strip()
+                )
+            )
+        )
+
+        preflight_configured_site_ids = None
+
         if (
             observation_provider is None
             and observation_binding.active
@@ -862,11 +879,70 @@ class PersistentTRouteEnsembleAnalyzer:
                 cache_root=resolved_output.parent / "observations",
             )
 
-            observation_binding = build_ngiab_observation_binding(
-                run_package,
-                provider=observation_cache,
-                observation_site_ids=observation_site_ids,
+            usable_sites = {
+                str(stream.site_id)
+                for stream
+                in observation_cache.active_streams
+            }
+
+            if requested_observation_order is not None:
+
+                downstream_target = (
+                    requested_observation_order[-1]
+                )
+
+                if downstream_target not in usable_sites:
+                    raise PersistentTRouteSidecarError(
+                        "The mandatory downstream assimilation "
+                        "gauge has zero usable observations in "
+                        "the active window: "
+                        f"{downstream_target}"
+                    )
+
+                retained_site_ids = tuple(
+                    site_id
+                    for site_id
+                    in requested_observation_order
+                    if site_id in usable_sites
+                )
+
+            else:
+
+                # Legacy all-safe-gauge mode has no explicit target
+                # designation. Remove zero-usable streams but preserve
+                # the binding's deterministic existing stream order.
+                retained_site_ids = tuple(
+                    str(stream.site_id)
+                    for stream
+                    in observation_binding.streams
+                    if str(stream.site_id) in usable_sites
+                )
+
+            preflight_configured_site_ids = (
+                retained_site_ids
             )
+
+            if retained_site_ids:
+
+                observation_binding = build_ngiab_observation_binding(
+                    run_package,
+                    provider=observation_cache,
+                    observation_site_ids=retained_site_ids,
+                )
+
+            else:
+
+                # In implicit all-gauge mode, no usable observations
+                # means forecast-only operation rather than creation of
+                # scientifically meaningless zero-information blocks.
+                observation_binding = NgiabAutomaticObservationBinding(
+                    run_package=run_package,
+                    status="forecast_only_no_usable_observations",
+                    streams=(),
+                    site_to_routing_feature={},
+                    provider=None,
+                    broker=None,
+                )
 
         ensemble = BaselineTRouteEnsembleRuntime.create_from_baseline(
             members,
@@ -901,19 +977,6 @@ class PersistentTRouteEnsembleAnalyzer:
         cfe_pf = SidecarSACSMAPFBinding(
             members,
             resolved_output / "sacsma-pf",
-            resampling_threshold_fraction=(
-                cfe_pf_resampling_threshold_fraction
-            ),
-            force_resampling=cfe_pf_force_resampling,
-            pf_observation_relative_error=(
-                pf_observation_relative_error
-            ),
-            pf_prediction_relative_error=(
-                pf_prediction_relative_error
-            ),
-            pf_minimum_error_std_m3s=(
-                pf_minimum_error_std_m3s
-            ),
             pf_random_seed=pf_random_seed,
             enabled=cfe_pf_enabled,
         )
@@ -933,41 +996,42 @@ class PersistentTRouteEnsembleAnalyzer:
             )
         )
         self._observation_binding = observation_binding
-        configured_observation_site_ids = tuple(
-            dict.fromkeys(
-                str(
-                    getattr(
-                        stream,
-                        "site_id",
-                        "",
-                    )
-                )
-                for stream
-                in getattr(
-                    observation_binding,
-                    "streams",
-                    (),
-                )
-                if str(
-                    getattr(
-                        stream,
-                        "site_id",
-                        "",
-                    )
-                )
-            )
-        )
+        if preflight_configured_site_ids is not None:
 
-        if (
-            not configured_observation_site_ids
-            and observation_site_ids is not None
-        ):
+            configured_observation_site_ids = tuple(
+                preflight_configured_site_ids
+            )
+
+        elif requested_observation_order is not None:
+
+            configured_observation_site_ids = tuple(
+                requested_observation_order
+            )
+
+        else:
+
             configured_observation_site_ids = tuple(
                 dict.fromkeys(
-                    str(value)
-                    for value
-                    in observation_site_ids
-                    if str(value)
+                    str(
+                        getattr(
+                            stream,
+                            "site_id",
+                            "",
+                        )
+                    )
+                    for stream
+                    in getattr(
+                        observation_binding,
+                        "streams",
+                        (),
+                    )
+                    if str(
+                        getattr(
+                            stream,
+                            "site_id",
+                            "",
+                        )
+                    )
                 )
             )
 
@@ -1151,51 +1215,165 @@ class PersistentTRouteEnsembleAnalyzer:
             )
         }
 
-    @staticmethod
     def _latest_mapped_observations(
+        self,
         forecast: TRouteForecastAnalysisState,
         lease: Any,
     ) -> tuple[
         dict[str, float],
         dict[str, float],
         tuple[str, ...],
+        dict[str, float],
     ]:
+        """Select the latest usable mapped observations in hydrologic order.
+
+        `quality_weight` is kept separate from physical observation-error
+        variance. Observations with zero source quality, future timestamps,
+        or age greater than two hours are not assimilated.
+
+        No undocumented NWM temporal weighting ramp is invented here.
+        """
+
         latest: dict[str, Any] = {}
+
+        analysis_time = (
+            lease.cycle.analysis_time
+        )
+
         for observation in lease.observations:
-            site_id = str(observation.stream.site_id)
+
+            site_id = str(
+                observation.stream.site_id
+            )
+
             if site_id not in forecast.gage_to_segment:
                 continue
-            existing = latest.get(site_id)
-            key = (
+
+            age_seconds = (
+                analysis_time
+                - observation.observed_at
+            ).total_seconds()
+
+            # Operational timestamp guard.
+            if (
+                age_seconds < 0.0
+                or age_seconds > 7200.0
+            ):
+                continue
+
+            quality = float(
+                getattr(
+                    observation,
+                    "quality_weight",
+                    1.0,
+                )
+            )
+
+            if (
+                not observation.is_usable
+                or quality <= 0.0
+            ):
+                continue
+
+            existing = latest.get(
+                site_id
+            )
+
+            candidate_key = (
                 observation.observed_at,
                 observation.observation_id,
             )
+
             if existing is None:
+
                 latest[site_id] = observation
+
                 continue
+
             existing_key = (
                 existing.observed_at,
                 existing.observation_id,
             )
-            if key > existing_key:
+
+            if candidate_key > existing_key:
                 latest[site_id] = observation
 
-        ordered_sites = tuple(sorted(latest))
-        observations = {
-            site_id: float(latest[site_id].value_cms)
-            for site_id in ordered_sites
-        }
-        errors = {
-            site_id: float(
-                latest[site_id].error_stddev_cms
-            )
-            for site_id in ordered_sites
-        }
-        observation_ids = tuple(
-            latest[site_id].observation_id
-            for site_id in ordered_sites
+        configured = tuple(
+            str(value)
+            for value
+            in self._configured_observation_site_ids
         )
-        return observations, errors, observation_ids
+
+        unexpected = tuple(
+            sorted(
+                set(latest)
+                - set(configured)
+            )
+        )
+
+        if unexpected:
+
+            raise PersistentTRouteSidecarError(
+                "Mapped observations fall outside the "
+                "configured hydrologic gauge order: "
+                f"{unexpected!r}"
+            )
+
+        # Preserve configured hydrologic order.
+        ordered_sites = tuple(
+            site_id
+            for site_id
+            in configured
+            if site_id in latest
+        )
+
+        observations = {
+            site_id:
+                float(
+                    latest[
+                        site_id
+                    ].value_cms
+                )
+            for site_id
+            in ordered_sites
+        }
+
+        errors = {
+            site_id:
+                float(
+                    latest[
+                        site_id
+                    ].error_stddev_cms
+                )
+            for site_id
+            in ordered_sites
+        }
+
+        observation_ids = tuple(
+            latest[
+                site_id
+            ].observation_id
+            for site_id
+            in ordered_sites
+        )
+
+        quality_weights = {
+            site_id:
+                float(
+                    latest[
+                        site_id
+                    ].quality_weight
+                )
+            for site_id
+            in ordered_sites
+        }
+
+        return (
+            observations,
+            errors,
+            observation_ids,
+            quality_weights,
+        )
 
     def _capture_routing_state(self) -> dict[str, Any]:
         member_states = []
@@ -1552,6 +1730,7 @@ class PersistentTRouteEnsembleAnalyzer:
                                 observations,
                                 errors,
                                 observation_ids,
+                                observation_quality_weights,
                             ) = self._latest_mapped_observations(
                                 forecast,
                                 lease,
@@ -1567,6 +1746,9 @@ class PersistentTRouteEnsembleAnalyzer:
                                         forecast,
                                         observations=observations,
                                         error_std=errors,
+                                        quality_weights=(
+                                            observation_quality_weights
+                                        ),
                                     )
                                 except Exception as error:
                                     status = (
@@ -1724,40 +1906,23 @@ class PersistentTRouteEnsembleAnalyzer:
                             "routing_analysis_cfe_pf_weight_update"
                         )
 
-                        threshold_fraction = float(
-                            pf_decision.plan.threshold_fraction
-                        )
-                        member_count = len(
-                            pf_decision.plan.member_ids
-                        )
-
                         cfe_pf_diagnostics = {
+                            # Pre-resampling SIR importance probabilities.
                             "posterior_weights": (
+                                pf_decision.plan.posterior_weights.tolist()
+                            ),
+                            # Equal analysis probabilities after complete SIR.
+                            "analysis_weights": (
                                 pf_decision.posterior_weights.tolist()
+                            ),
+                            "resampling_policy": (
+                                "sir_every_informed_cycle"
                             ),
                             "effective_sample_size": float(
                                 pf_decision.effective_sample_size
                             ),
-                            "threshold_fraction": (
-                                threshold_fraction
-                            ),
-                            "threshold_effective_sample_size": (
-                                threshold_fraction * member_count
-                            ),
                             "resampled": bool(
                                 pf_decision.plan.resampled
-                            ),
-                            "observation_relative_error": float(
-                                self._cfe_pf
-                                .pf_observation_relative_error
-                            ),
-                            "prediction_relative_error": float(
-                                self._cfe_pf
-                                .pf_prediction_relative_error
-                            ),
-                            "minimum_error_std_m3s": float(
-                                self._cfe_pf
-                                .pf_minimum_error_std_m3s
                             ),
                             "likelihood_diagnostics": dict(
                                 pf_decision.weight_diagnostics
@@ -2026,33 +2191,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--pf-observation-relative-error",
-        type=float,
-        default=0.10,
-        help=(
-            "MATLAB-compatible PF observation relative error "
-            "Err (default: 0.10)."
-        ),
-    )
-    parser.add_argument(
-        "--pf-prediction-relative-error",
-        type=float,
-        default=0.10,
-        help=(
-            "MATLAB-compatible PF prediction relative error "
-            "Err2 (default: 0.10)."
-        ),
-    )
-    parser.add_argument(
-        "--pf-minimum-error-std",
-        type=float,
-        default=1.0,
-        help=(
-            "Minimum PF likelihood error standard deviation "
-            "MinVar in m3/s (default: 1.0)."
-        ),
-    )
-    parser.add_argument(
         "--pf-random-seed",
         type=int,
         help=(
@@ -2066,14 +2204,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=(
             "Disable runoff particle-filter weighting "
             "while retaining routing EnSRF assimilation."
-        ),
-    )
-    parser.add_argument(
-        "--force-pf-resampling",
-        action="store_true",
-        help=(
-            "Force a PF resampling decision for "
-            "controlled direct-ancestry acceptance testing."
         ),
     )
     args = parser.parse_args(argv)
@@ -2106,14 +2236,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         observation_provider = UnavailableObservationProvider()
 
-    if (
-        args.disable_cfe_pf
-        and args.force_pf_resampling
-    ):
-        parser.error(
-            "--force-pf-resampling cannot be combined "
-            "with --disable-cfe-pf."
-        )
 
     analyzer = PersistentTRouteEnsembleAnalyzer(
         args.run_dir,
@@ -2124,18 +2246,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         localization_cutoff_m=args.localization_cutoff_m,
         cfe_pf_enabled=(
             not args.disable_cfe_pf
-        ),
-        cfe_pf_force_resampling=(
-            args.force_pf_resampling
-        ),
-        pf_observation_relative_error=(
-            args.pf_observation_relative_error
-        ),
-        pf_prediction_relative_error=(
-            args.pf_prediction_relative_error
-        ),
-        pf_minimum_error_std_m3s=(
-            args.pf_minimum_error_std
         ),
         pf_random_seed=args.pf_random_seed,
         observation_site_ids=args.observation_site_ids,
@@ -2163,4 +2273,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

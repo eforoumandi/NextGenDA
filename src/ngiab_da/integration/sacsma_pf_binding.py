@@ -1,7 +1,7 @@
 """In-memory SAC-SMA PF binding for the synchronized NextGen sidecar.
 
-The validated routing-posterior qlat transform and reduced-rank incremental
-likelihood are reused from the existing CFE PF binding.  SAC-SMA ancestry,
+The routing-posterior qlat transform feeds a covariance-aware reduced-rank
+incremental density ratio and complete local SIR analysis. SAC-SMA ancestry,
 however, is materialized directly at the current synchronized barrier because
 the complete six-state SAC-SMA prognostic state has been demonstrated to be
 BMI-readable, BMI-writable, and sufficient for exact future trajectory
@@ -22,6 +22,10 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from ngiab_da.filters.density_ratio import (
+    reduced_rank_gaussian_density_ratio_weights,
+)
+
 from ngiab_da.integration.inplace_forcing_lineage import InplaceForcingLineageManager
 
 from ngiab_da.coupling.dual_filter import RoutingPosteriorQlat
@@ -32,7 +36,7 @@ from ngiab_da.integration.runoff_pf_binding import (
     _readonly,
 )
 from ngiab_da.runtime.pf_resampling import (
-    BaselinePFResampler,
+    SIRPFResampler,
 )
 
 
@@ -210,102 +214,6 @@ class _SerialRoutingIncrementOutcome:
         )
 
 
-def _combine_multiblock_log_likelihoods(
-    log_likelihood_terms: Sequence[Any],
-    *,
-    member_count: int,
-) -> np.ndarray:
-    """Normalize a product of current-cycle serial likelihood factors."""
-
-    count = int(
-        member_count
-    )
-
-    if count < 2:
-        raise SidecarSACSMAPFBindingError(
-            "Multiblock SAC-SMA PF requires "
-            "at least two members."
-        )
-
-    factors = tuple(
-        log_likelihood_terms
-    )
-
-    if not factors:
-
-        return _readonly(
-            np.full(
-                count,
-                1.0 / count,
-                dtype=np.float64,
-            ),
-            dtype=np.float64,
-        )
-
-    total = np.zeros(
-        count,
-        dtype=np.float64,
-    )
-
-    for raw in factors:
-
-        values = np.asarray(
-            raw,
-            dtype=np.float64,
-        ).reshape(-1)
-
-        if values.shape != (
-            count,
-        ):
-            raise SidecarSACSMAPFBindingError(
-                "A multiblock likelihood factor "
-                "does not align with members."
-            )
-
-        if not np.isfinite(
-            values
-        ).all():
-            raise SidecarSACSMAPFBindingError(
-                "A multiblock likelihood factor "
-                "contains non-finite values."
-            )
-
-        total += values
-
-    shifted = (
-        total
-        - float(
-            np.max(
-                total
-            )
-        )
-    )
-
-    mass = np.exp(
-        shifted
-    )
-
-    normalizer = float(
-        np.sum(
-            mass
-        )
-    )
-
-    if (
-        not math.isfinite(
-            normalizer
-        )
-        or normalizer <= 0.0
-    ):
-        raise SidecarSACSMAPFBindingError(
-            "Combined multiblock likelihood "
-            "has no finite positive mass."
-        )
-
-    return _readonly(
-        mass / normalizer,
-        dtype=np.float64,
-    )
 
 
 def _multiblock_ancestry_matrix(
@@ -583,309 +491,8 @@ class SidecarSACSMAPFDecision:
 
 
 
-@dataclass(frozen=True, slots=True)
-class _LISStyleCurrentCycleWeightResult:
-    """Current-cycle Gaussian particle-likelihood diagnostics."""
-
-    weights: np.ndarray
-    log_likelihood: np.ndarray
-    effective_rank: int
-    regularization_variance: float
 
 
-def _lis_style_current_cycle_gaussian_weights(
-    predicted_observations: Any,
-    observations: Any,
-    error_std: Any,
-    localization_weights: Any | None = None,
-) -> _LISStyleCurrentCycleWeightResult:
-    """Compute current-cycle PF likelihood weights.
-
-    No previous-cycle PF weight enters this function.
-
-    ``localization_weights`` performs observation-space likelihood
-    tempering.  A weight of zero makes that qlat pseudo-observation
-    exactly neutral to relative particle probability.  A weight of
-    one preserves the existing likelihood exactly.
-    """
-
-    predicted = np.asarray(
-        predicted_observations,
-        dtype=np.float64,
-    )
-
-    observed = np.asarray(
-        observations,
-        dtype=np.float64,
-    ).reshape(-1)
-
-    sigma = np.asarray(
-        error_std,
-        dtype=np.float64,
-    ).reshape(-1)
-
-    # Preserve the certified V19 diversity-preservation factor.
-    sigma = sigma * 2.5
-
-    if predicted.ndim != 2:
-        raise ValueError(
-            "predicted_observations must be a "
-            "member-by-observation matrix."
-        )
-
-    member_count, observation_count = (
-        predicted.shape
-    )
-
-    if member_count < 1:
-        raise ValueError(
-            "At least one SAC-SMA particle is required."
-        )
-
-    if observation_count < 1:
-        raise ValueError(
-            "At least one PF observation is required."
-        )
-
-    if observed.shape != (
-        observation_count,
-    ):
-        raise ValueError(
-            "PF observations do not align with "
-            "predicted observations."
-        )
-
-    if sigma.shape != (
-        observation_count,
-    ):
-        raise ValueError(
-            "PF error_std does not align with "
-            "predicted observations."
-        )
-
-    if not np.isfinite(
-        predicted
-    ).all():
-        raise ValueError(
-            "Predicted SAC-SMA qlat must be finite."
-        )
-
-    if not np.isfinite(
-        observed
-    ).all():
-        raise ValueError(
-            "Routing-derived PF observation must be finite."
-        )
-
-    if (
-        not np.isfinite(
-            sigma
-        ).all()
-        or np.any(
-            sigma <= 0.0
-        )
-    ):
-        raise ValueError(
-            "PF observation-error standard deviations "
-            "must be finite and positive."
-        )
-
-    localization: np.ndarray | None
-
-    if localization_weights is None:
-        localization = None
-        effective_rank = int(
-            observation_count
-        )
-
-    else:
-        localization = np.asarray(
-            localization_weights,
-            dtype=np.float64,
-        ).reshape(-1)
-
-        if localization.shape != (
-            observation_count,
-        ):
-            raise ValueError(
-                "PF localization weights do not align "
-                "with predicted observations."
-            )
-
-        if (
-            not np.isfinite(
-                localization
-            ).all()
-            or np.any(
-                localization < 0.0
-            )
-            or np.any(
-                localization > 1.0
-            )
-        ):
-            raise ValueError(
-                "PF localization weights must be "
-                "finite and lie in [0, 1]."
-            )
-
-        effective_rank = int(
-            np.count_nonzero(
-                localization > 0.0
-            )
-        )
-
-        if effective_rank < 1:
-            raise ValueError(
-                "At least one PF localization "
-                "weight must be positive."
-            )
-
-    innovation = (
-        observed[
-            np.newaxis,
-            :
-        ]
-        - predicted
-    )
-
-    standardized = (
-        innovation
-        / sigma[
-            np.newaxis,
-            :
-        ]
-    )
-
-    #
-    # Exact legacy branch for None or all-one localization.
-    #
-    if (
-        localization is None
-        or np.all(
-            localization == 1.0
-        )
-    ):
-
-        quadratic = np.sum(
-            standardized
-            * standardized,
-            axis=1,
-        )
-
-        log_normalization = (
-            np.sum(
-                np.log(
-                    sigma
-                )
-            )
-            + 0.5
-            * observation_count
-            * math.log(
-                2.0
-                * math.pi
-            )
-        )
-
-        effective_rank = int(
-            observation_count
-        )
-
-    else:
-
-        quadratic = np.sum(
-            localization[
-                np.newaxis,
-                :
-            ]
-            * standardized
-            * standardized,
-            axis=1,
-        )
-
-        #
-        # The normalization is member-independent, so it does not
-        # alter normalized PF weights.  Tempering it nevertheless
-        # keeps the logged likelihood internally consistent.
-        #
-        log_normalization = (
-            np.sum(
-                localization
-                * np.log(
-                    sigma
-                )
-            )
-            + 0.5
-            * float(
-                np.sum(
-                    localization
-                )
-            )
-            * math.log(
-                2.0
-                * math.pi
-            )
-        )
-
-    log_likelihood = (
-        -0.5
-        * quadratic
-        - log_normalization
-    )
-
-    if not np.isfinite(
-        log_likelihood
-    ).all():
-        raise ValueError(
-            "Current-cycle PF likelihood is non-finite."
-        )
-
-    shifted = (
-        log_likelihood
-        - float(
-            np.max(
-                log_likelihood
-            )
-        )
-    )
-
-    unnormalized = np.exp(
-        shifted
-    )
-
-    total = float(
-        np.sum(
-            unnormalized
-        )
-    )
-
-    if (
-        not math.isfinite(
-            total
-        )
-        or total <= 0.0
-    ):
-        raise ValueError(
-            "Current-cycle PF likelihood has "
-            "invalid total probability mass."
-        )
-
-    weights = (
-        unnormalized
-        / total
-    )
-
-    return _LISStyleCurrentCycleWeightResult(
-        weights=_readonly(
-            weights,
-            dtype=np.float64,
-        ),
-        log_likelihood=_readonly(
-            log_likelihood,
-            dtype=np.float64,
-        ),
-        effective_rank=effective_rank,
-        regularization_variance=0.0,
-    )
 
 class SidecarSACSMAPFBinding(
     RunoffPFBinding
@@ -897,44 +504,41 @@ class SidecarSACSMAPFBinding(
         member_ids: Sequence[str],
         output_root: str | Path,
         *,
-        prior_weights: Any | None = None,
-        resampling_threshold_fraction: float = 0.5,
-        force_resampling: bool = False,
-        pf_observation_relative_error: float = 0.10,
-        pf_prediction_relative_error: float = 0.10,
-        pf_minimum_error_std_m3s: float = 1.0,
         pf_random_seed: int | None = None,
-        minimum_error_std_m3s: float = 1.0e-8,
-        relative_error_floor: float = 0.02,
         covariance_regularization_fraction: float = 1.0e-12,
         enabled: bool = True,
     ) -> None:
         """Initialize SAC-SMA using generic runoff-PF state."""
 
+        # Generic RunoffPFBinding also supports the historical
+        # pseudo-observation/SIS formulation. SAC-SIR does not.
+        #
+        # Neutral values are supplied only because the shared
+        # routing->qlat regression helper returns a diagnostic
+        # RoutingPosteriorQlat.error_std field. These values do
+        # not enter the SAC-SIR density-ratio weights.
+        numerical_epsilon = float(
+            np.finfo(
+                np.float64
+            ).eps
+        )
+
         super().__init__(
             member_ids,
             output_root,
-            prior_weights=prior_weights,
-            resampling_threshold_fraction=(
-                resampling_threshold_fraction
-            ),
-            force_resampling=force_resampling,
-            pf_observation_relative_error=(
-                pf_observation_relative_error
-            ),
-            pf_prediction_relative_error=(
-                pf_prediction_relative_error
-            ),
+            prior_weights=None,
+            resampling_threshold_fraction=1.0,
+            force_resampling=False,
+            pf_observation_relative_error=0.0,
+            pf_prediction_relative_error=0.0,
             pf_minimum_error_std_m3s=(
-                pf_minimum_error_std_m3s
+                numerical_epsilon
             ),
             pf_random_seed=pf_random_seed,
             minimum_error_std_m3s=(
-                minimum_error_std_m3s
+                numerical_epsilon
             ),
-            relative_error_floor=(
-                relative_error_floor
-            ),
+            relative_error_floor=0.0,
             covariance_regularization_fraction=(
                 covariance_regularization_fraction
             ),
@@ -1726,10 +1330,16 @@ class SidecarSACSMAPFBinding(
                 "must lie in [0, 1]."
             )
 
+        # Sequential routing -> qlat conditioning.
         #
-        # One exact routing -> qlat pseudo-observation for every
-        # serial EnSRF gauge increment.
-        #
+        # Gauge g+1 starts from the qlat posterior produced by gauge g.
+        # The original forecast is NOT reused for every serial observation.
+        conditioned_qlat = np.array(
+            forecast_qlat,
+            dtype=np.float64,
+            copy=True,
+        )
+
         serial_feedback: list[
             RoutingPosteriorQlat | None
         ] = []
@@ -1747,7 +1357,8 @@ class SidecarSACSMAPFBinding(
             )
 
             if not np.any(
-                gauge_localization > 0.0
+                gauge_localization
+                > 0.0
             ):
 
                 serial_feedback.append(
@@ -1759,11 +1370,13 @@ class SidecarSACSMAPFBinding(
             increment_outcome = (
                 _SerialRoutingIncrementOutcome(
                     routing_outcome,
+
                     serial_prior[
                         gauge_index,
                         :,
                         :,
                     ],
+
                     serial_posterior[
                         gauge_index,
                         :,
@@ -1774,11 +1387,14 @@ class SidecarSACSMAPFBinding(
 
             (
                 feedback,
-                _,
+                next_conditioned,
             ) = self._routing_posterior_analysis(
-                forecast_qlat,
+                conditioned_qlat,
+
                 location_ids,
+
                 increment_outcome,
+
                 location_localization_weights=(
                     gauge_localization
                 ),
@@ -1788,29 +1404,78 @@ class SidecarSACSMAPFBinding(
                 feedback
             )
 
+            conditioned_qlat = np.asarray(
+                next_conditioned,
+                dtype=np.float64,
+            )
+
         #
-        # Backward-compatible overall routing-posterior qlat summary.
-        # This summary is diagnostic only; it does not determine
-        # multiblock weights or ancestry.
+        # Diagnostic qlat summary.
         #
-        (
-            summary_feedback,
-            _,
-        ) = self._routing_posterior_analysis(
-            forecast_qlat,
-            location_ids,
-            routing_outcome,
+        # IMPORTANT:
+        # feedback.error_std is NOT used by the PF likelihood.
+        # Forecast and conditioned ensemble covariance define the
+        # reduced-rank density-ratio geometry directly.
+        #
+        final_mean = np.mean(
+            conditioned_qlat,
+            axis=0,
         )
 
-        block_plans: list[Any] = []
+        final_spread = np.std(
+            conditioned_qlat,
+            axis=0,
+            ddof=1,
+        )
+
+        summary_feedback = RoutingPosteriorQlat(
+            location_ids=location_ids,
+
+            values=np.asarray(
+                final_mean,
+                dtype=np.float64,
+            ),
+
+            error_std=np.maximum(
+                final_spread,
+                self._minimum_error,
+            ),
+        )
+
+        #
+        # Shared systematic offset across blocks.
+        #
+        # This is chosen for the clean limiting property:
+        #
+        # identical local weights -> identical local ancestry.
+        #
+        cycle_rng = np.random.default_rng(
+            self._seed(
+                run_id=run_id,
+
+                cycle=cycle,
+
+                purpose=(
+                    "sacsma-block-sir-systematic-offset"
+                ),
+
+                pf_random_seed=(
+                    self._pf_random_seed
+                ),
+            )
+        )
+
+        systematic_offset = float(
+            cycle_rng.random()
+        )
+
+        block_plans: list[
+            Any
+        ] = []
 
         block_information_gages: list[
             tuple[str, ...]
         ] = []
-
-        force_resampling = bool(
-            self._force_resampling
-        )
 
         for (
             block_index,
@@ -1821,20 +1486,14 @@ class SidecarSACSMAPFBinding(
 
             owned_locations = np.asarray(
                 [
-                    value == block_id
+                    value
+                    == block_id
+
                     for value
                     in location_block_ids
                 ],
                 dtype=np.bool_,
             )
-
-            likelihood_terms: list[
-                np.ndarray
-            ] = []
-
-            information_gages: list[
-                str
-            ] = []
 
             causal_indices = np.flatnonzero(
                 block_gage_mask[
@@ -1843,50 +1502,50 @@ class SidecarSACSMAPFBinding(
                 ]
             )
 
+            support = np.zeros(
+                len(
+                    location_ids
+                ),
+                dtype=np.bool_,
+            )
+
+            information_gages: list[
+                str
+            ] = []
+
             for raw_index in causal_indices:
 
                 gauge_index = int(
                     raw_index
                 )
 
-                feedback = serial_feedback[
-                    gauge_index
-                ]
-
-                if feedback is None:
-                    continue
-
-                localized_to_block = np.where(
-                    owned_locations,
-                    location_weights[
-                        gauge_index,
-                        :,
-                    ],
-                    0.0,
-                )
-
-                if not np.any(
-                    localized_to_block > 0.0
+                if (
+                    serial_feedback[
+                        gauge_index
+                    ]
+                    is None
                 ):
                     continue
 
-                weight_result = (
-                    _lis_style_current_cycle_gaussian_weights(
-                        forecast_qlat,
-                        feedback.values,
-                        feedback.error_std,
-                        localization_weights=(
-                            localized_to_block
-                        ),
+                gauge_support = (
+                    owned_locations
+                    &
+                    (
+                        location_weights[
+                            gauge_index,
+                            :,
+                        ]
+                        > 0.0
                     )
                 )
 
-                likelihood_terms.append(
-                    np.asarray(
-                        weight_result
-                        .log_likelihood,
-                        dtype=np.float64,
-                    )
+                if not np.any(
+                    gauge_support
+                ):
+                    continue
+
+                support |= (
+                    gauge_support
                 )
 
                 information_gages.append(
@@ -1895,46 +1554,101 @@ class SidecarSACSMAPFBinding(
                     ]
                 )
 
-            block_weights = (
-                _combine_multiblock_log_likelihoods(
-                    likelihood_terms,
-                    member_count=(
-                        member_count
-                    ),
+            if (
+                information_gages
+                and np.any(
+                    support
                 )
-            )
+            ):
 
-            rng = np.random.default_rng(
-                self._seed(
-                    run_id=run_id,
-                    cycle=cycle,
-                    purpose=(
-                        "sacsma-multiblock-resampling:"
-                        + block_id
-                    ),
-                    pf_random_seed=(
-                        self._pf_random_seed
-                    ),
+                weight_result = (
+                    reduced_rank_gaussian_density_ratio_weights(
+                        forecast_qlat[
+                            :,
+                            support,
+                        ],
+
+                        forecast_qlat[
+                            :,
+                            support,
+                        ],
+
+                        conditioned_qlat[
+                            :,
+                            support,
+                        ],
+
+                        covariance_regularization_fraction=(
+                            max(
+                                float(
+                                    self._regularization
+                                ),
+
+                                np.finfo(
+                                    np.float64
+                                ).eps,
+                            )
+                        ),
+                    )
                 )
-            )
+
+                block_weights = _readonly(
+                    weight_result.weights,
+                    dtype=np.float64,
+                )
+
+                information_present = (
+                    not np.array_equal(
+                        forecast_qlat[
+                            :,
+                            support,
+                        ],
+
+                        conditioned_qlat[
+                            :,
+                            support,
+                        ],
+                    )
+                )
+
+            else:
+
+                block_weights = _readonly(
+                    np.full(
+                        member_count,
+
+                        1.0
+                        /
+                        member_count,
+
+                        dtype=np.float64,
+                    ),
+
+                    dtype=np.float64,
+                )
+
+                information_present = False
 
             block_plan = (
-                BaselinePFResampler.plan(
+                SIRPFResampler.plan(
                     cycle=cycle,
+
                     member_ids=(
                         self.member_ids
                     ),
+
                     posterior_weights=(
                         block_weights
                     ),
-                    rng=rng,
-                    threshold_fraction=(
-                        self._resampling_threshold
+
+                    systematic_offset=(
+                        systematic_offset
                     ),
-                    force=bool(
-                        force_resampling
-                        and information_gages
+
+                    informed=bool(
+                        information_present
                     ),
+
                 )
             )
 
@@ -2089,11 +1803,6 @@ class SidecarSACSMAPFBinding(
             next_posterior_weights
         )
 
-        if (
-            force_resampling
-            and any_resampled
-        ):
-            self._force_resampling = False
 
         block_ess = tuple(
             float(
@@ -2133,7 +1842,7 @@ class SidecarSACSMAPFBinding(
                 ),
             ),
             (
-                "multiblock_serial_factor_count",
+                "multiblock_information_gage_link_count",
                 float(
                     sum(
                         len(value)
@@ -2505,20 +2214,61 @@ class SidecarSACSMAPFBinding(
             ),
         )
 
-        # Preserve the accepted reduced-rank incremental likelihood.
+        # Covariance-aware incremental information message.
         #
-        # Critically, no raw USGS observation enters this call.
-        # V18: LIS-style current-cycle Gaussian likelihood.
-        # Routing EnSRF posterior-derived qlat is the PF observation.
-        # SAC-SMA current qlat is H(x). Previous-cycle particle
-        # weights are deliberately NOT multiplied into this cycle.
+        # Routing-conditioned qlat is NOT treated as a second independent
+        # observation. Forecast and routing-conditioned qlat ensembles define
+        # a density ratio in one forecast-supported reduced-rank subspace.
+        if location_localization is None:
+
+            likelihood_support = np.ones(
+                len(
+                    location_ids
+                ),
+                dtype=np.bool_,
+            )
+
+        else:
+
+            likelihood_support = (
+                location_localization
+                > 0.0
+            )
+
+        if not np.any(
+            likelihood_support
+        ):
+            raise SidecarSACSMAPFBindingError(
+                "SAC-SMA PF likelihood has no localized qlat support."
+            )
+
         weight_result = (
-            _lis_style_current_cycle_gaussian_weights(
-                forecast_qlat,
-                feedback.values,
-                feedback.error_std,
-                localization_weights=(
-                    location_localization
+            reduced_rank_gaussian_density_ratio_weights(
+                forecast_qlat[
+                    :,
+                    likelihood_support,
+                ],
+
+                forecast_qlat[
+                    :,
+                    likelihood_support,
+                ],
+
+                posterior_qlat_ensemble[
+                    :,
+                    likelihood_support,
+                ],
+
+                covariance_regularization_fraction=(
+                    max(
+                        float(
+                            self._regularization
+                        ),
+
+                        np.finfo(
+                            np.float64
+                        ).eps,
+                    )
                 ),
             )
         )
@@ -2531,57 +2281,82 @@ class SidecarSACSMAPFBinding(
         rng = np.random.default_rng(
             self._seed(
                 run_id=run_id,
+
                 cycle=cycle,
+
                 purpose=(
-                    "sacsma-in-memory-resampling"
+                    "sacsma-block-sir-systematic-offset"
                 ),
+
                 pf_random_seed=(
                     self._pf_random_seed
                 ),
             )
         )
 
-        force_resampling = (
-            self._force_resampling
+        systematic_offset = float(
+            rng.random()
         )
 
-        plan = (
-            BaselinePFResampler.plan(
-                cycle=cycle,
-                member_ids=(
+        routing_information_present = (
+            not np.array_equal(
+                forecast_qlat[
+                    :,
+                    likelihood_support,
+                ],
+
+                posterior_qlat_ensemble[
+                    :,
+                    likelihood_support,
+                ],
+            )
+        )
+
+        plan = SIRPFResampler.plan(
+            cycle=cycle,
+
+            member_ids=(
+                self.member_ids
+            ),
+
+            posterior_weights=(
+                updated_weights
+            ),
+
+            systematic_offset=(
+                systematic_offset
+            ),
+
+            informed=bool(
+                routing_information_present
+            ),
+
+        )
+
+        #
+        # Complete SIR:
+        #
+        # the importance probabilities above are converted into ancestry
+        # during this analysis cycle. Therefore the resulting analysis
+        # ensemble is represented by equal particle probabilities.
+        #
+        next_posterior_weights = _readonly(
+            np.full(
+                len(
                     self.member_ids
                 ),
-                posterior_weights=(
-                    updated_weights
-                ),
-                rng=rng,
-                threshold_fraction=(
-                    self._resampling_threshold
-                ),
-                force=force_resampling,
-            )
-        )
 
-        consume_force_resampling = bool(
-            force_resampling
-            and plan.resampled
-        )
-
-        # Unlike the CFE implementation, ancestry is materialized
-        # immediately at this synchronized barrier. Therefore a
-        # successful resampling resets the persistent particle weights
-        # to 1/N immediately.
-        if plan.resampled:
-            next_posterior_weights = _readonly(
-                np.full(
-                    len(self.member_ids),
-                    1.0 / len(self.member_ids),
-                    dtype=np.float64,
+                1.0
+                /
+                len(
+                    self.member_ids
                 ),
+
                 dtype=np.float64,
-            )
-        else:
-            next_posterior_weights = updated_weights
+            ),
+
+            dtype=np.float64,
+        )
 
         planned_state_ancestors = np.asarray(
             plan.ancestors,
@@ -2785,9 +2560,6 @@ class SidecarSACSMAPFBinding(
 
         self._posterior_weights = next_posterior_weights
 
-        if consume_force_resampling:
-            self._force_resampling = False
-
         diagnostics = (
             (
                 "localization_enabled",
@@ -2912,20 +2684,20 @@ class SidecarSACSMAPFBinding(
                 ),
             ),
             (
-                "log_likelihood_min",
+                "log_density_ratio_min",
                 float(
                     np.min(
                         weight_result
-                        .log_likelihood
+                        .log_density_ratio
                     )
                 ),
             ),
             (
-                "log_likelihood_max",
+                "log_density_ratio_max",
                 float(
                     np.max(
                         weight_result
-                        .log_likelihood
+                        .log_density_ratio
                     )
                 ),
             ),
@@ -3162,16 +2934,20 @@ def _natural_decision_values(
     )
 
 
-    weights = getattr(
-        decision,
-        "posterior_weights",
-        None,
+    weights = (
+        getattr(
+            plan,
+            "posterior_weights",
+            None,
+        )
+        if plan is not None
+        else None
     )
 
 
-    if weights is None and plan is not None:
+    if weights is None:
         weights = getattr(
-            plan,
+            decision,
             "posterior_weights",
             None,
         )
@@ -3706,4 +3482,3 @@ def _natural_logged_sacsma_analyze(
 SidecarSACSMAPFBinding.analyze = (
     _natural_logged_sacsma_analyze
 )
-

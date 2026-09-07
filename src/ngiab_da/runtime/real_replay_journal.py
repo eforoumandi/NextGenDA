@@ -142,6 +142,7 @@ class ReplayJournalObservation:
     observation_id: str
     quality_code: str
     is_usable: bool
+    quality_weight: float = 1.0
 
     def __post_init__(self) -> None:
         source = str(self.source).strip()
@@ -194,6 +195,26 @@ class ReplayJournalObservation:
             "quality_code",
             quality_code or "unknown",
         )
+        quality_weight = _finite_float(
+            self.quality_weight,
+            name="Observation quality weight",
+        )
+
+        if not (
+            0.0
+            <= quality_weight
+            <= 1.0
+        ):
+            raise ValueError(
+                "Observation quality weight must lie in [0, 1]."
+            )
+
+        object.__setattr__(
+            self,
+            "quality_weight",
+            quality_weight,
+        )
+
         object.__setattr__(
             self,
             "is_usable",
@@ -222,6 +243,7 @@ class ReplayJournalObservation:
             observation_id=observation.observation_id,
             quality_code=observation.quality_code,
             is_usable=observation.is_usable,
+            quality_weight=observation.quality_weight,
         )
 
     def to_observation(self) -> DischargeObservation:
@@ -236,6 +258,7 @@ class ReplayJournalObservation:
             error_stddev_cms=self.error_stddev_cms,
             observation_id=self.observation_id,
             quality_code=self.quality_code,
+            quality_weight=self.quality_weight,
             is_usable=self.is_usable,
         )
 
@@ -249,6 +272,7 @@ class ReplayJournalObservation:
             "error_stddev_cms": self.error_stddev_cms,
             "observation_id": self.observation_id,
             "quality_code": self.quality_code,
+            "quality_weight": self.quality_weight,
             "is_usable": self.is_usable,
         }
 

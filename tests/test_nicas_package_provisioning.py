@@ -396,3 +396,100 @@ def test_prepare_persists_spatial_error_contract(
         ==
         spatial
     )
+
+
+def test_execute_with_contract_injects_verified_nicas_runtime_values(
+    tmp_path,
+    monkeypatch,
+):
+    spatial = _spatial(
+        tmp_path
+    )
+
+    _write_contract(
+        tmp_path,
+        spatial,
+    )
+
+    monkeypatch.setattr(
+        assimilation_window,
+        "runtime_window_kwargs",
+        lambda package: {
+            "validation_window_start_epoch_seconds":
+                1,
+
+            "validation_window_end_epoch_seconds":
+                2,
+
+            "preserve_simulation_window":
+                True,
+        },
+    )
+
+    captured = (
+        execute_with_assimilation_contract(
+            prepared_package=tmp_path,
+
+            execute_transparent_run=(
+                lambda **kwargs:
+                    kwargs
+            ),
+
+            runtime_kwargs={
+                "ensemble_size":
+                    50,
+            },
+        )
+    )
+
+    assert (
+        captured[
+            "precip_temperature_correlation"
+        ]
+        ==
+        -0.1
+    )
+
+    assert (
+        captured[
+            "spatial_operator_sha256"
+        ]
+        ==
+        spatial[
+            "operator_sha256"
+        ]
+    )
+
+    assert (
+        Path(
+            captured[
+                "spatial_operator_path"
+            ]
+        ).resolve()
+        ==
+        (
+            tmp_path
+            /
+            spatial[
+                "operator_path"
+            ]
+        ).resolve()
+    )
+
+    assert (
+        captured[
+            "ensemble_size"
+        ]
+        ==
+        50
+    )
+
+    assert (
+        captured[
+            "run_dir"
+        ]
+        ==
+        str(
+            tmp_path.resolve()
+        )
+    )

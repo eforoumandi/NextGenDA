@@ -17,6 +17,9 @@ from ngiab_da.filters.particle import (
     effective_sample_size,
     systematic_resample,
 )
+from ngiab_da.filters.density_ratio import (
+    adjustment_minimizing_systematic_resample,
+)
 
 
 class PFResamplingError(RuntimeError):
@@ -294,3 +297,189 @@ __all__ = (
     "PFResamplingPlan",
     "BaselinePFResampler",
 )
+
+class SIRPFResampler:
+    """Complete local SIR analysis.
+
+    Effective sample size is retained only as a diagnostic.
+
+    Every block receiving a nonzero routing-information message completes the
+    resampling stage during that analysis cycle. The caller then represents
+    the analysis ensemble with equal weights.
+
+    The systematic offset is supplied explicitly so the same offset can be
+    shared across local blocks.
+    """
+
+    @staticmethod
+    def plan(
+        *,
+        cycle: CycleWindow,
+        member_ids: Sequence[str],
+        posterior_weights: Any,
+        systematic_offset: float,
+        informed: bool,
+    ) -> PFResamplingPlan:
+
+        ids = tuple(
+            str(value)
+            for value in member_ids
+        )
+
+        if (
+            not ids
+            or len(
+                set(
+                    ids
+                )
+            )
+            != len(
+                ids
+            )
+        ):
+            raise ValueError(
+                "member_ids must be nonempty and unique."
+            )
+
+        weights = np.asarray(
+            posterior_weights,
+            dtype=np.float64,
+        )
+
+        if weights.shape != (
+            len(
+                ids
+            ),
+        ):
+            raise ValueError(
+                "posterior_weights must align with member_ids."
+            )
+
+        if (
+            not np.isfinite(
+                weights
+            ).all()
+            or np.any(
+                weights < 0.0
+            )
+        ):
+            raise ValueError(
+                "posterior_weights must be finite and nonnegative."
+            )
+
+        total = float(
+            np.sum(
+                weights
+            )
+        )
+
+        if (
+            not math.isfinite(
+                total
+            )
+            or total
+            <= 0.0
+        ):
+            raise ValueError(
+                "posterior_weights must have positive mass."
+            )
+
+        normalized = (
+            weights
+            /
+            total
+        )
+
+        ess = effective_sample_size(
+            normalized
+        )
+
+        u = float(
+            systematic_offset
+        )
+
+        if (
+            not math.isfinite(
+                u
+            )
+            or not (
+                0.0
+                <= u
+                < 1.0
+            )
+        ):
+            raise ValueError(
+                "systematic_offset must lie in [0, 1)."
+            )
+
+        if not isinstance(
+            informed,
+            bool,
+        ):
+            raise TypeError(
+                "informed must be a boolean."
+            )
+
+        # Complete SIR:
+        #
+        # an information-bearing analysis always completes selection.
+        #
+        # A no-information block remains exact identity.
+        resampled = bool(
+            informed
+        )
+
+        if resampled:
+
+            ancestors = (
+                adjustment_minimizing_systematic_resample(
+                    normalized,
+                    offset=u,
+                )
+            )
+
+        else:
+
+            ancestors = np.arange(
+                len(
+                    ids
+                ),
+                dtype=np.int64,
+            )
+
+        return PFResamplingPlan(
+            cycle=cycle,
+
+            member_ids=ids,
+
+            # These are the PRE-RESAMPLING importance probabilities.
+            posterior_weights=normalized,
+
+            effective_sample_size=ess,
+
+            # Compatibility field only.
+            # Complete SIR does NOT use ESS as a switch.
+            threshold_fraction=1.0,
+
+            ancestors=ancestors,
+
+            resampled=resampled,
+
+            rng_bit_generator=(
+                "shared-systematic-offset"
+            ),
+
+            rng_state={
+                "mode":
+                    "complete-sir",
+
+                "offset":
+                    u,
+
+                "adjustment_minimizing":
+                    True,
+
+                "ess_is_diagnostic_only":
+                    True,
+            },
+        )

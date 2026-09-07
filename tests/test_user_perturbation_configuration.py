@@ -709,6 +709,14 @@ def test_runtime_builder_override_end_to_end(
     ] == 0.31
 
 
+    # precip_temperature_correlation is owned by the
+    # assimilation-window contract, not generic runtime_kwargs.
+    assert (
+        "precip_temperature_correlation"
+        not in runtime
+    )
+
+
     assert runtime[
         "additive_forcing_errors"
     ] == {
@@ -730,19 +738,10 @@ def test_runtime_builder_override_end_to_end(
     ] is None
 
 
-    assert runtime[
-        "pf_observation_relative_error"
-    ] == 0.10
 
 
-    assert runtime[
-        "pf_prediction_relative_error"
-    ] == 0.10
 
 
-    assert runtime[
-        "pf_minimum_error_std"
-    ] == 1.0e-8
 
 
     assert (

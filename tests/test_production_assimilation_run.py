@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from nextgenda.model_adapters import available_model_names, detect_model_adapter_from_package, resolve_model_adapter
 from nextgenda.model_adapters.sac_sma import STATE_PERTURBATION_SEED
-from nextgenda.runtime.assimilation_run import ENSEMBLE_SIZE, FORCING_PHI, FORCING_RANDOM_SEED, FORCING_SPATIAL_CORRELATION, PF_MINIMUM_ERROR_STD_M3S, PF_RANDOM_SEED, PRECIPITATION_CV, TEMPERATURE_ERROR_STD_K, build_production_assimilation_request, run_production_assimilation
+from nextgenda.runtime.assimilation_run import ENSEMBLE_SIZE, FORCING_PHI, FORCING_RANDOM_SEED, FORCING_SPATIAL_CORRELATION, PF_RANDOM_SEED, PRECIPITATION_CV, TEMPERATURE_ERROR_STD_K, build_production_assimilation_request, run_production_assimilation
 from nextgenda.runtime.legacy_v5 import to_backend_runtime_kwargs
 
 def _package(tmp_path: Path) -> Path:
@@ -33,7 +33,7 @@ def test_production_runtime_controls_are_generic(tmp_path):
     assert request.model == 'sac-sma'
     assert request.backend == 'legacy-v5'
     assert kwargs['particle_filter_enabled'] is True
-    assert kwargs['force_pf_resampling'] is False
+    assert 'force_pf_resampling' not in kwargs
     assert 'cfe_pf_enabled' not in kwargs
     assert 'force_cfe_pf_resampling' not in kwargs
 
@@ -46,7 +46,6 @@ def test_frozen_model_neutral_science_controls(tmp_path):
     assert FORCING_SPATIAL_CORRELATION == 0.27
     assert FORCING_RANDOM_SEED == 12345
     assert TEMPERATURE_ERROR_STD_K == 1.0
-    assert PF_MINIMUM_ERROR_STD_M3S == 1e-08
     assert PF_RANDOM_SEED is None
     assert kwargs['ensemble_size'] == 50
     assert kwargs['forcing_phi'] == 0.73
@@ -77,7 +76,7 @@ def test_legacy_translation_is_confined_to_compatibility_layer(tmp_path):
     request = build_production_assimilation_request(_package(tmp_path))
     backend = to_backend_runtime_kwargs(request.runtime_kwargs)
     assert backend['cfe_pf_enabled'] is True
-    assert backend['force_pf_resampling'] is False
+    assert 'force_pf_resampling' not in backend
     assert 'particle_filter_enabled' not in backend
     assert 'force_cfe_pf_resampling' not in backend
 
@@ -97,7 +96,7 @@ def test_execution_adapter_preserves_existing_backend_contract(tmp_path):
     assert captured['ensemble_size'] == 50
     assert captured['observation_site_ids'] == ('09106150',)
     assert captured['cfe_pf_enabled'] is True
-    assert captured['force_pf_resampling'] is False
+    assert 'force_pf_resampling' not in captured
     assert captured_env['NGIAB_DA_RUNOFF_PF_MODEL'] == 'sacsma'
 
 def test_explicit_model_alias_is_supported(tmp_path):
@@ -115,5 +114,5 @@ def test_latest_runtime_exposes_no_process_replay_api():
     assert 'pf_replay_event' not in parameters
     assert 'force_pf_generation_launch_failure' not in parameters
     assert 'dynamic_pf_replay' not in parameters
-    assert 'force_pf_resampling' in parameters
+    assert 'force_pf_resampling' not in parameters
     assert 'force_cfe_pf_resampling' not in parameters
