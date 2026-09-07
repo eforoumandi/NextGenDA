@@ -1,7 +1,7 @@
 """Persistent stepwise t-route analysis for sequential NGen members.
 
 This module is the real routing-side analyzer used by the versioned
-Unix-domain socket ensemble barrier.  It converts CFE outlet depth to
+Unix-domain socket ensemble barrier.  It converts catchment qlat depth to
 t-route lateral inflow with authoritative hydrofabric areas, advances one
 persistent t-route BMI process per ensemble member, optionally assimilates
 time-aligned USGS discharge through the localized EnSRF, and checkpoints
@@ -290,7 +290,7 @@ def load_authoritative_catchment_areas(
     return dict(sorted(areas.items()))
 
 
-def convert_cfe_depth_payloads_to_qlat(
+def convert_catchment_depth_payloads_to_qlat(
     requests: Sequence[Mapping[str, Any]],
     member_ids: Sequence[str],
     *,
@@ -299,7 +299,7 @@ def convert_cfe_depth_payloads_to_qlat(
     segment_ids: Sequence[int] | np.ndarray,
     hydrologic_interval_seconds: float,
 ) -> tuple[dict[str, np.ndarray], int]:
-    """Convert CFE outlet depth in metres to t-route qlat in m3/s."""
+    """Convert catchment qlat depth in metres to t-route qlat in m3/s."""
 
     ordered_members = tuple(str(value) for value in member_ids)
     ordered_requests = tuple(requests)
@@ -403,7 +403,7 @@ def convert_cfe_depth_payloads_to_qlat(
             units = item.get("units")
             if units != "m":
                 raise PersistentTRouteSidecarError(
-                    "CFE outlet-depth qlat payload units must be "
+                    "Catchment qlat depth payload units must be "
                     f"'m', received {units!r} for {catchment_id}."
                 )
             if not available:
@@ -425,7 +425,7 @@ def convert_cfe_depth_payloads_to_qlat(
 
             if not math.isfinite(depth_m) or depth_m < 0.0:
                 raise PersistentTRouteSidecarError(
-                    "CFE outlet depth must be finite and nonnegative: "
+                    "Catchment qlat depth must be finite and nonnegative: "
                     f"{catchment_id}={depth_m!r}."
                 )
             if not math.isfinite(area_sqkm) or area_sqkm <= 0.0:
@@ -1591,7 +1591,7 @@ class PersistentTRouteEnsembleAnalyzer:
 
             segment_ids = self._ensemble.members[0].domain.segment_ids
             lateral_by_member, available_qlat_count = (
-                convert_cfe_depth_payloads_to_qlat(
+                convert_catchment_depth_payloads_to_qlat(
                     ordered_requests,
                     self._member_ids,
                     catchment_to_segment=(
