@@ -10,8 +10,8 @@ The current SAC-SMA workflow combines:
 
 - ensemble meteorological forcing and SAC-SMA state uncertainty,
 - network-localized routing EnSRF,
-- routing-posterior lateral-inflow pseudo-observations,
-- localized SAC-SMA particle filtering,
+- serial routing-to-qlat ensemble conditioning,
+- covariance-aware reduced-rank density-ratio Block-SIR updates for SAC-SMA,
 - multigauge causal runoff-generation blocks,
 - coherent ancestry propagation through model states and stochastic memory.
 

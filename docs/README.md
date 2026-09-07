@@ -21,7 +21,7 @@ Planned sections:
 15. Ensemble configuration
 16. Forcing perturbations
 17. SAC-SMA state perturbations
-18. Particle-filter errors
+18. Block-SIR reproducibility and diagnostics
 19. Preflight validation
 20. Single-gauge assimilation
 21. Multigauge assimilation

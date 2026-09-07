@@ -82,8 +82,8 @@ modeling basin and remains an assimilation site.
 
 The workflow then collects the model/run configuration, including the
 assimilation period, warm-up, forcing source, ensemble configuration,
-meteorological forcing errors, SAC-SMA state errors, particle-filter
-uncertainties, and optional upstream gauges.
+meteorological forcing errors, SAC-SMA state errors, and optional upstream
+gauges.
 
 A final confirmation is required before execution.
 
@@ -111,15 +111,18 @@ A final confirmation is required before execution.
 All three of these SAC-SMA state-error quantities are exposed by the public
 interactive workflow.
 
-### Particle filter
+### SAC-SMA Block-SIR
 
-| Setting | Default |
-|---|---:|
-| Routing-derived pseudo-observation relative error | 0.10 |
-| SAC-SMA prediction relative error | 0.10 |
+The current covariance-aware SAC-SMA Block-SIR formulation does **not** expose
+the former pseudo-observation-error, ESS-resampling-threshold, or
+forced-resampling controls.
 
-The PF minimum error standard deviation is a numerical safeguard rather than
-a beginner scientific tuning parameter.
+Those controls belonged to the retired diagonal/SIS-style runoff particle
+filter and do not participate in the current density-ratio update.
+
+For every informed runoff block, complete SIR ancestry selection is performed
+during the analysis cycle. Effective sample size (ESS) is retained as a
+diagnostic rather than a switch that decides whether assimilation occurs.
 
 ## 8. Single-gauge assimilation
 
@@ -167,13 +170,13 @@ t-route ensemble routing
 localized serial routing EnSRF
         |
         v
-routing-posterior-derived qlat pseudo-observations
+serial routing-to-qlat ensemble conditioning
         |
         v
-localized SAC-SMA particle filter
+forecast-vs-conditioned qlat density-ratio message
         |
         v
-full-member SAC-SMA ancestry
+localized complete SAC-SMA Block-SIR ancestry
         |
         +--> SAC-SMA states
         +--> LIS/GMAO state-error temporal memory
@@ -182,8 +185,13 @@ full-member SAC-SMA ancestry
 
 Raw USGS discharge observations enter the routing EnSRF only.
 
-The SAC-SMA particle filter does not directly assimilate raw USGS discharge.
-It consumes pseudo-observations derived from the routing posterior.
+The SAC-SMA Block-SIR update does not directly assimilate raw USGS
+discharge.
+
+Instead, the routing forecast and routing-conditioned qlat ensembles define
+an incremental covariance-aware density ratio in the forecast-supported
+ensemble subspace. The routing-conditioned qlat ensemble is therefore not
+treated as an independent second observation of the same discharge data.
 
 Routing localization uses Along-The-Stream causal support.
 
@@ -275,9 +283,10 @@ Useful multi-gauge diagnostics include:
 - configured gauges;
 - active gauges by cycle;
 - routing EnSRF updates;
-- routing-posterior qlat pseudo-observations;
-- PF effective sample size (ESS);
-- resampling decisions;
+- routing-conditioned qlat ensembles;
+- density-ratio effective rank and particle-weight diagnostics;
+- PF effective sample size (ESS), used diagnostically;
+- informed/uninformed Block-SIR status;
 - block-specific ancestry;
 - localization support;
 - checkpoint history.
@@ -299,7 +308,7 @@ For a scientific experiment, preserve at least:
 - ensemble size;
 - forcing perturbation configuration;
 - SAC-SMA state perturbation configuration;
-- PF uncertainty configuration;
+- Block-SIR runtime/reproducibility configuration and random-seed policy;
 - runtime status/provenance manifests;
 - random-seed policy.
 
@@ -342,12 +351,16 @@ Check:
 docker version
 ```
 
-### Runtime environment has not been loaded
+### Runtime/bootstrap configuration is missing or stale
 
-Run:
+Rerun the certified bootstrap:
 
 ```bash
+python scripts/bootstrap_nextgenda.py
 ```
+
+For the standard portable installation, manually sourcing a generated runtime
+environment file is not required.
 
 ### Prerequisite check fails
 

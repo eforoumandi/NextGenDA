@@ -1,55 +1,108 @@
 # Running NextGenDA
 
-This guide will become the release's Step-0-to-100 execution tutorial.
+This guide summarizes the current public execution surface for the certified
+SAC-SMA NextGenDA workflow.
 
-The exact public-input surface is being frozen from the release-candidate
-source before final commands are inserted.
+For installation details and fuller explanations, see
+[`BEGINNER_GUIDE.md`](BEGINNER_GUIDE.md).
+
+## Primary public command
+
+After installing and bootstrapping NextGenDA:
+
+```bash
+conda activate nextgenda
+python scripts/bootstrap_nextgenda.py
+nextgenda assimilate
+```
+
+`nextgenda assimilate` launches the interactive production workflow.
+
+The workflow asks for the downstream/target USGS gauge, model/run periods,
+warm-up, forcing source, ensemble and perturbation configuration, and optional
+eligible upstream gauges for multigauge assimilation.
 
 ## Intended beginner workflow
 
 1. Install NextGenDA.
 2. Activate the Python environment.
-3. Bootstrap the certified runtime and t-route checkout.
-4. Select a downstream/target USGS gauge.
-5. Select optional upstream gauges for multigauge assimilation.
+3. Bootstrap the certified runtime and exact t-route checkout.
+4. Run `nextgenda assimilate`.
+5. Select the downstream/target USGS gauge.
 6. Select the assimilation start and end dates.
 7. Select the warm-up period.
 8. Select or accept the ensemble size.
 9. Select or accept meteorological forcing perturbation settings.
 10. Select or accept SAC-SMA state perturbation settings.
-11. Select or accept particle-filter error settings.
-12. Run single-gauge or multigauge assimilation.
-13. Monitor runtime progress.
-14. Inspect routing EnSRF diagnostics.
-15. Inspect SAC-SMA PF diagnostics.
-16. Inspect ESS and resampling diagnostics.
-17. Inspect final streamflow/output products.
-18. Record the run configuration and release identity for reproducibility.
+11. Select none, some, or all eligible upstream gauges.
+12. Review the final configuration and approve execution.
+13. Monitor runtime status and routing/Block-SIR diagnostics.
+14. Preserve run configuration, software identities, and random-seed policy.
 
 ## Scientific routing/assimilation contract
 
-For the certified SAC-SMA release:
+For the current SAC-SMA release:
 
-- raw USGS streamflow observations enter the routing EnSRF;
-- routing posterior information is transformed into runoff/qlat-space
-  pseudo-observations;
-- the SAC-SMA PF uses those routing-posterior pseudo-observations;
-- raw USGS observations do not directly enter the SAC-SMA PF;
+- raw USGS streamflow observations enter the localized serial routing EnSRF;
+- each serial routing analysis conditions the evolving qlat ensemble;
+- original forecast qlat and final routing-conditioned qlat define the
+  covariance-aware incremental density-ratio message used by SAC-SMA
+  Block-SIR;
+- the routing-conditioned qlat ensemble is not treated as an independent
+  second observation of the same streamflow data;
+- raw USGS observations do not directly enter the SAC-SMA Block-SIR update;
 - routing localization follows the certified along-the-stream topology;
-- runoff-generation PF localization is upstream-only;
-- multigauge runoff blocks preserve nested causal support;
-- resampling applies complete-member ancestry coherently to SAC-SMA state,
-  LIS/GMAO perturbation memory, and forcing lineage;
-- no process replay/rerun mechanism is part of the release architecture.
+- runoff-generation localization is upstream-only;
+- multigauge runoff blocks preserve static nested causal support;
+- each informed runoff block completes SIR ancestry selection during the
+  analysis cycle;
+- ESS is a diagnostic and is not a resampling on/off switch;
+- selected ancestry is applied coherently to the complete SAC-SMA state
+  vector, LIS/GMAO perturbation memory, and forcing lineage;
+- no process replay/rerun mechanism is part of the current architecture.
 
-## Exact commands
+## Single-gauge assimilation
 
-The exact release commands will be inserted from:
+Choose the downstream gauge and select no upstream gauges when the workflow
+lists eligible upstream sites.
 
-`SOURCE_INTERFACE_CONTRACT.md`
+## Multigauge assimilation
 
-after the source interface audit and matched-N50 science acceptance are
-complete.
+Choose the downstream gauge and then select one or more hydrologically
+upstream gauges reported as eligible by NextGenDA.
 
-No user-facing command will be documented from memory or from an obsolete
-development interface.
+The downstream gauge remains assimilated. The runoff-block partition is
+static for the configured gauge set; individual cycles may have fewer usable
+observations without repartitioning the basin.
+
+## Deterministic baseline
+
+For a prepared package, the lower-level public deterministic command is:
+
+```bash
+nextgenda baseline-run PREPARED_PACKAGE
+```
+
+This executes a deterministic NextGen/NGIAB baseline and does not perform data
+assimilation.
+
+## Important interpretation
+
+For predictive DA evaluation, use the routing **prior** (forecast before the
+current observation update) as the primary DA skill quantity.
+
+The routing analysis/posterior is an in-sample assimilation-fit diagnostic and
+should not be presented as independent predictive skill.
+
+## Reproducibility
+
+Preserve at least:
+
+- NextGenDA Git revision;
+- runtime image identity/digest;
+- exact t-route revision;
+- gauge configuration;
+- model, warm-up, and assimilation periods;
+- ensemble and perturbation configuration;
+- random-seed policy;
+- runtime status and provenance manifests.
