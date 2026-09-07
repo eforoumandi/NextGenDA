@@ -433,13 +433,69 @@ def test_bootstrap_rejects_native_windows():
     bootstrap = load_script("bootstrap_nextgenda.py")
 
     with pytest.raises(SystemExit) as exc_info:
-        bootstrap._require_supported_host(os_name="nt")
+        bootstrap._require_supported_host(
+            os_name="nt",
+            system_name="Windows",
+            machine="AMD64",
+            kernel_release="10.0",
+        )
 
     message = str(exc_info.value)
     assert "WSL2" in message
     assert "NTFS" in message
 
-    bootstrap._require_supported_host(os_name="posix")
+    bootstrap._require_supported_host(
+        os_name="posix",
+        system_name="Linux",
+        machine="x86_64",
+        kernel_release="6.8.0-generic",
+    )
+
+    bootstrap._require_supported_host(
+        os_name="posix",
+        system_name="Linux",
+        machine="AMD64",
+        kernel_release="5.15.153.1-microsoft-standard-WSL2",
+    )
+
+
+def test_bootstrap_rejects_non_linux_host():
+    bootstrap = load_script("bootstrap_nextgenda.py")
+
+    with pytest.raises(SystemExit):
+        bootstrap._require_supported_host(
+            os_name="posix",
+            system_name="Darwin",
+            machine="x86_64",
+            kernel_release="25.0.0",
+        )
+
+
+def test_bootstrap_rejects_non_amd64_linux():
+    bootstrap = load_script("bootstrap_nextgenda.py")
+
+    with pytest.raises(SystemExit):
+        bootstrap._require_supported_host(
+            os_name="posix",
+            system_name="Linux",
+            machine="aarch64",
+            kernel_release="6.8.0",
+        )
+
+
+def test_bootstrap_rejects_wsl1():
+    bootstrap = load_script("bootstrap_nextgenda.py")
+
+    with pytest.raises(SystemExit) as exc_info:
+        bootstrap._require_supported_host(
+            os_name="posix",
+            system_name="Linux",
+            machine="x86_64",
+            kernel_release="4.4.0-19041-Microsoft",
+        )
+
+    assert "WSL1" in str(exc_info.value)
+    assert "WSL2" in str(exc_info.value)
 
 
 def test_setup_troute_rejects_native_windows():
@@ -468,6 +524,56 @@ def test_docs_require_wsl2_for_windows():
     assert "through WSL2" in readme
     assert "Do not run `bootstrap_nextgenda.py` from Windows PowerShell." in install
     assert "Windows users must run NextGenDA through WSL2." in troute
+
+
+def test_clean_machine_ubuntu_docker_install_is_actionable():
+    value = (
+        ROOT
+        / "docs"
+        / "installation"
+        / "BEGINNER_INSTALLATION.md"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    required = (
+        "https://download.docker.com/linux/ubuntu/gpg",
+        "/etc/apt/sources.list.d/docker.sources",
+        "docker-ce",
+        "docker-ce-cli",
+        "containerd.io",
+        "docker-buildx-plugin",
+        "docker-compose-plugin",
+        "docker info",
+    )
+
+    for token in required:
+        assert token in value
+
+
+def test_running_guide_preserves_scientific_interpretation():
+    value = (
+        ROOT
+        / "docs"
+        / "user-guide"
+        / "RUNNING_NEXTGENDA.md"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    required = (
+        "## Scientific routing/assimilation contract",
+        "localized serial routing EnSRF",
+        "SAC-SMA Block-SIR",
+        "raw USGS observations do not directly enter",
+        "no process replay/rerun mechanism",
+        "## Important interpretation",
+        "routing **prior**",
+        "analysis/posterior",
+    )
+
+    for token in required:
+        assert token in value
 
 
 def test_bootstrap_host_gate_precedes_external_setup():

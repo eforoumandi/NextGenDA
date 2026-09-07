@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -46,29 +47,82 @@ LOCK = (
 )
 
 
+def _normalize_architecture(
+    value: str,
+) -> str:
+
+    token = str(value).strip().lower()
+
+    if token in {"x86_64", "amd64"}:
+        return "amd64"
+
+    if token in {"aarch64", "arm64"}:
+        return "arm64"
+
+    return token
+
+
+def _wsl_generation(
+    kernel_release: str,
+) -> int | None:
+
+    token = str(kernel_release).strip().lower()
+
+    if "microsoft" not in token:
+        return None
+
+    if "wsl2" in token or "microsoft-standard" in token:
+        return 2
+
+    return 1
+
+
 def _require_supported_host(
     *,
     os_name: str | None = None,
+    system_name: str | None = None,
+    machine: str | None = None,
+    kernel_release: str | None = None,
 ) -> None:
 
-    current_os_name = (
-        os.name
-        if os_name is None
-        else str(os_name)
+    current_os_name = os.name if os_name is None else str(os_name)
+    current_system = platform.system() if system_name is None else str(system_name)
+    current_machine = _normalize_architecture(
+        platform.machine() if machine is None else str(machine)
+    )
+    current_kernel_release = (
+        platform.release() if kernel_release is None else str(kernel_release)
     )
 
-    if current_os_name == "nt":
-
+    if current_os_name == "nt" or current_system.strip().lower() == "windows":
         raise SystemExit(
             "ERROR: native Windows/PowerShell is not a certified "
             "NextGenDA production host.\n\n"
-            "NextGenDA is certified for Linux AMD64 and for Windows "
-            "through WSL2. The pinned t-route source contains Linux-valid "
-            "filenames (including ':' characters) that NTFS cannot "
-            "represent.\n\n"
-            "Open an Ubuntu/WSL2 terminal and run the documented "
-            "NextGenDA installation there. Do not disable Git NTFS "
-            "protections and do not modify the pinned t-route source."
+            "NextGenDA is certified for Linux AMD64 and for Windows through "
+            "WSL2. The pinned t-route source contains Linux-valid filenames "
+            "that native Windows NTFS cannot represent.\n\n"
+            "Open an Ubuntu/WSL2 terminal and run the documented installation."
+        )
+
+    if current_system.strip().lower() != "linux":
+        raise SystemExit(
+            "ERROR: unsupported NextGenDA production host.\n\n"
+            "This release is certified only for Linux AMD64, including "
+            "Windows 10/11 through WSL2. "
+            f"Detected system={current_system!r}, architecture={current_machine!r}."
+        )
+
+    if current_machine != "amd64":
+        raise SystemExit(
+            "ERROR: unsupported NextGenDA production architecture.\n\n"
+            "This release is certified only for linux/amd64. "
+            f"Detected system={current_system!r}, architecture={current_machine!r}."
+        )
+
+    if _wsl_generation(current_kernel_release) == 1:
+        raise SystemExit(
+            "ERROR: WSL1 is not a certified NextGenDA production host.\n\n"
+            "Windows users must use WSL2."
         )
 
 

@@ -1,65 +1,51 @@
 # NextGenDA Dependencies
 
-The final public installation instructions are validated from a clean
-GitHub clone before release.
+## Certified host
 
-## Python
+Current production support is Linux AMD64 (`linux/amd64`) or Windows 10/11
+through WSL2 on an x86-64 machine.
 
-Supported release-candidate environment:
+Native Windows, macOS, Linux ARM64, and WSL1 are not certified production
+hosts for this release.
 
-- Python 3.12
+## Host commands
 
-Python packages:
+The public workflow requires Git, Docker, Python, and `uv`. Docker must be
+installed, running, and usable by the account launching NextGenDA.
 
-- NumPy 1.26.4
-- pandas 3.0.5
-- SciPy 1.17.1
-- xarray 2026.7.0
-- netCDF4 1.7.4
-- h5py 3.16.0
-- PyYAML 6.0.3
+## Python environment
 
-The exact environment is provided by:
+The release environment is defined by `environment.yml` and uses Python 3.12.
+The environment installs the local NextGenDA package with `pip -e .`, so a
+separate `pip install` step is not required.
 
-- `requirements.txt`
-- `environment.yml`
+## NGIAB preparation backends
 
-## Docker
+The bootstrap installs the exact NGIAB preparation repositories and commits
+recorded in `configs/upstream_pins.json`.
 
-Production NextGenDA execution uses Docker containers.
+## NextGen / ngen and SAC-SMA
 
-Docker must therefore be installed and running.
-
-## NextGen / ngen
-
-Production simulations require the supported NextGen/ngen runtime.
-
-The final beginner guide will include:
-
-1. acquisition,
-2. required build tools,
-3. supported revision,
-4. build procedure,
-5. verification.
+Users do not manually build ngen or SAC-SMA for the certified beginner
+workflow. Production model execution uses the immutable runtime recorded in
+`runtime/runtime-lock.json`.
 
 ## t-route
 
-NextGenDA uses t-route for routing and routing data assimilation.
+NextGenDA uses the exact t-route source revision recorded in
+`runtime/runtime-lock.json`. The bootstrap installs and verifies it
+automatically; no host compilation is required.
 
-The following Python namespaces originate from the supported t-route
-installation/source tree:
+## Installation
 
-- `troute`
-- `nwm_routing`
-- `bmi_troute`
+```bash
+conda env create -f environment.yml
+conda activate nextgenda
+python scripts/bootstrap_nextgenda.py
+```
 
-They are therefore intentionally not installed from `requirements.txt`.
-
-## Installation verification
-
-After installation:
+For later diagnostics:
 
 ```bash
 python scripts/check_prerequisites.py
-
-The final public guide will contain complete commands for WSL2/Linux users.
+```

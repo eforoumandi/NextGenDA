@@ -1,31 +1,19 @@
-# NextGenDA Release Candidate
+# NextGenDA Release-Candidate Provenance
 
-This repository staging tree was prepared from:
+The original public repository staging tree was prepared from:
 
 `nextgenda-sacsma-multigauge-rc1b-20260904T015203Z`
 
-## Current status
+The `main` branch has continued to receive release-readiness corrections after
+that staging snapshot. Until a final release is explicitly tagged, scientific
+results and release acceptance must be tied to an exact NextGenDA Git revision.
 
-The software architecture is frozen while final scientific validation is in progress.
+Current public execution documentation:
 
-Current validation experiment:
+- [`README.md`](README.md)
+- [`docs/installation/BEGINNER_INSTALLATION.md`](docs/installation/BEGINNER_INSTALLATION.md)
+- [`docs/user-guide/BEGINNER_GUIDE.md`](docs/user-guide/BEGINNER_GUIDE.md)
+- [`docs/user-guide/RUNNING_NEXTGENDA.md`](docs/user-guide/RUNNING_NEXTGENDA.md)
 
-`matched-n50-apr-jun2020-20260904T004127Z`
-
-The validation compares:
-
-1. 50-member open loop
-2. 50-member downstream-only data assimilation
-3. 50-member upstream + downstream multigauge data assimilation
-
-## Important
-
-This is a release-candidate snapshot, not yet the final public release.
-
-Final release requires:
-
-- successful N=50 matched validation,
-- science diagnostics,
-- second-basin generalization,
-- clean GitHub clone/install validation,
-- complete beginner installation/run documentation.
+Documentation/status corrections do not modify NextGen, t-route, routing
+EnSRF, SAC-SMA Block-SIR mathematics, or scientific runtime behavior.

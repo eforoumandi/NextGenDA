@@ -3,41 +3,84 @@
 This guide summarizes the current public execution surface for the certified
 SAC-SMA NextGenDA workflow.
 
-For installation details and fuller explanations, see
-[`BEGINNER_GUIDE.md`](BEGINNER_GUIDE.md).
+For a clean-computer installation, see
+[`../installation/BEGINNER_INSTALLATION.md`](../installation/BEGINNER_INSTALLATION.md).
+For fuller scientific guidance, see [`BEGINNER_GUIDE.md`](BEGINNER_GUIDE.md).
 
-## Primary public command
+## One-time installation/bootstrap
 
-After installing and bootstrapping NextGenDA:
+Bootstrap is an installation/update operation, not a command that must precede
+every scientific run.
+
+After a fresh clone:
 
 ```bash
+conda env create -f environment.yml
 conda activate nextgenda
 python scripts/bootstrap_nextgenda.py
+```
+
+## Normal public run command
+
+For a normal later session after installation:
+
+```bash
+cd ~/NextGenDA
+conda activate nextgenda
 nextgenda assimilate
 ```
 
-`nextgenda assimilate` launches the interactive production workflow.
+The interactive workflow asks for the downstream/target gauge, rainfall-runoff
+model, model calibration start/end dates, data-assimilation start/end dates,
+warm-up, forcing, ensemble/state uncertainty settings, and optional eligible
+upstream gauges.
 
-The workflow asks for the downstream/target USGS gauge, model/run periods,
-warm-up, forcing source, ensemble and perturbation configuration, and optional
-eligible upstream gauges for multigauge assimilation.
+Calibration must end before assimilation begins; the periods may not overlap
+or touch.
 
 ## Intended beginner workflow
 
-1. Install NextGenDA.
-2. Activate the Python environment.
-3. Bootstrap the certified runtime and exact t-route checkout.
-4. Run `nextgenda assimilate`.
-5. Select the downstream/target USGS gauge.
-6. Select the assimilation start and end dates.
-7. Select the warm-up period.
-8. Select or accept the ensemble size.
-9. Select or accept meteorological forcing perturbation settings.
-10. Select or accept SAC-SMA state perturbation settings.
-11. Select none, some, or all eligible upstream gauges.
-12. Review the final configuration and approve execution.
-13. Monitor runtime status and routing/Block-SIR diagnostics.
-14. Preserve run configuration, software identities, and random-seed policy.
+1. Install and bootstrap NextGenDA once.
+2. Activate the `nextgenda` Conda environment.
+3. Run `nextgenda assimilate`.
+4. Enter the downstream/target USGS gauge.
+5. Enter model calibration start and end dates.
+6. Enter data-assimilation start and end dates.
+7. Enter or accept the warm-up duration.
+8. Select the forcing source.
+9. Select or accept ensemble and perturbation settings.
+10. Select none, some, or all eligible upstream gauges.
+11. Review the final configuration.
+12. Either run immediately or stop after package preparation.
+
+## Prepare now, run later
+
+At the final prompt, answer `n` to stop after preparation. NextGenDA prints
+the prepared-package path.
+
+Validate the package without model execution:
+
+```bash
+nextgenda assimilation-run PREPARED_PACKAGE --dry-run
+```
+
+Run the prepared experiment later:
+
+```bash
+nextgenda assimilation-run PREPARED_PACKAGE
+```
+
+Replace `PREPARED_PACKAGE` with the exact path printed by NextGenDA.
+
+## Single-gauge assimilation
+
+Choose the downstream gauge and select `none` when the workflow lists eligible
+upstream gauges.
+
+## Multigauge assimilation
+
+Choose the downstream gauge and select one or more eligible hydrologically
+upstream gauges. The downstream gauge remains assimilated.
 
 ## Scientific routing/assimilation contract
 
@@ -58,26 +101,12 @@ For the current SAC-SMA release:
   analysis cycle;
 - ESS is a diagnostic and is not a resampling on/off switch;
 - selected ancestry is applied coherently to the complete SAC-SMA state
-  vector, LIS/GMAO perturbation memory, and forcing lineage;
+  vector, LIS/GMAO perturbation memory, and forcing lineage; and
 - no process replay/rerun mechanism is part of the current architecture.
-
-## Single-gauge assimilation
-
-Choose the downstream gauge and select no upstream gauges when the workflow
-lists eligible upstream sites.
-
-## Multigauge assimilation
-
-Choose the downstream gauge and then select one or more hydrologically
-upstream gauges reported as eligible by NextGenDA.
-
-The downstream gauge remains assimilated. The runoff-block partition is
-static for the configured gauge set; individual cycles may have fewer usable
-observations without repartitioning the basin.
 
 ## Deterministic baseline
 
-For a prepared package, the lower-level public deterministic command is:
+For a prepared package:
 
 ```bash
 nextgenda baseline-run PREPARED_PACKAGE
@@ -85,6 +114,21 @@ nextgenda baseline-run PREPARED_PACKAGE
 
 This executes a deterministic NextGen/NGIAB baseline and does not perform data
 assimilation.
+
+## Updating NextGenDA
+
+```bash
+git pull
+conda env update -f environment.yml --prune
+conda activate nextgenda
+python scripts/bootstrap_nextgenda.py
+```
+
+After a successful update/bootstrap, normal runs again require only:
+
+```bash
+nextgenda assimilate
+```
 
 ## Important interpretation
 
@@ -96,13 +140,6 @@ should not be presented as independent predictive skill.
 
 ## Reproducibility
 
-Preserve at least:
-
-- NextGenDA Git revision;
-- runtime image identity/digest;
-- exact t-route revision;
-- gauge configuration;
-- model, warm-up, and assimilation periods;
-- ensemble and perturbation configuration;
-- random-seed policy;
-- runtime status and provenance manifests.
+Preserve at least the NextGenDA Git revision, runtime image identity/digest,
+exact t-route revision, gauge configuration, calibration/warm-up/assimilation
+periods, perturbation configuration, random-seed policy, and runtime manifests.

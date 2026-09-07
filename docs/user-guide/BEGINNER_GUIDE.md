@@ -80,10 +80,13 @@ The workflow is interactive.
 It first asks for the downstream target USGS gauge. That gauge defines the
 modeling basin and remains an assimilation site.
 
-The workflow then collects the model/run configuration, including the
-assimilation period, warm-up, forcing source, ensemble configuration,
-meteorological forcing errors, SAC-SMA state errors, and optional upstream
-gauges.
+The workflow then collects the model/run configuration, including the model
+calibration start/end dates, data-assimilation start/end dates, warm-up,
+forcing source, ensemble configuration, meteorological forcing errors,
+SAC-SMA state errors, and optional upstream gauges.
+
+The calibration period must end before the assimilation period begins; the
+two periods may not overlap or touch.
 
 A final confirmation is required before execution.
 
@@ -200,15 +203,20 @@ Runoff-generation PF localization is upstream-only.
 For a multi-gauge configuration, each runoff block uses only causally valid
 active gauges for that block.
 
-## 11. Warm-up and assimilation window
+## 11. Calibration, warm-up, and assimilation windows
 
-The user specifies:
+The interactive workflow asks for:
 
-- assimilation start;
-- assimilation end;
+- model calibration start;
+- model calibration end;
+- data-assimilation start;
+- data-assimilation end; and
 - warm-up duration.
 
-The model package begins before the active assimilation period by the
+Calibration must finish before assimilation begins; overlapping or touching
+calibration and assimilation periods are rejected.
+
+The assimilation package begins before the active assimilation period by the
 requested warm-up duration. Assimilation itself begins at the requested
 assimilation start.
 
@@ -216,14 +224,26 @@ The public default warm-up duration is 30 days.
 
 ## 12. Preparing without immediately running
 
-The interactive workflow can prepare a package without immediately launching
-the complete production experiment.
+The interactive workflow can prepare and fully configure a package without
+immediately launching the complete production experiment.
 
-This allows the user to inspect the prepared configuration before execution.
+At the final prompt, answer `n` to stop after preparation. NextGenDA prints
+the prepared-package path.
 
-For normal beginner use, return later through the documented NextGenDA
-runtime workflow rather than manually editing generated scientific
-configuration files.
+Validate that package later without model execution:
+
+```bash
+nextgenda assimilation-run PREPARED_PACKAGE --dry-run
+```
+
+Then launch it with:
+
+```bash
+nextgenda assimilation-run PREPARED_PACKAGE
+```
+
+Replace `PREPARED_PACKAGE` with the exact package path printed by the
+interactive workflow.
 
 ## 13. Run workspaces and outputs
 
@@ -322,6 +342,7 @@ For a normal source update:
 
 ```bash
 git pull
+conda env update -f environment.yml --prune
 conda activate nextgenda
 python scripts/bootstrap_nextgenda.py
 ```
