@@ -1331,6 +1331,11 @@ def main() -> int:
             args
         )
 
+    if args.command == "assimilate":
+        return _assimilate(
+            args
+        )
+
     parser.error(
         f"Unhandled command: {args.command}"
     )
