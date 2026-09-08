@@ -3270,7 +3270,7 @@ def execute_transparent_run(
             executed_capability="routing_ensrf_only",
             degradation_reasons=(
                 *plan.degradation_reasons,
-                "cfe_pf_disabled_by_user",
+                "runoff_pf_disabled_by_user",
             ),
         )
 
