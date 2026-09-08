@@ -154,7 +154,7 @@ def test_stepwise_sir_diagnostics_have_only_active_fields():
             )
             and target.id
             ==
-            "cfe_pf_diagnostics"
+            "runoff_pf_diagnostics"
         ):
 
             assignments.append(

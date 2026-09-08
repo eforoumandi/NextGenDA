@@ -951,7 +951,7 @@ class PersistentTRouteEnsembleAnalyzer:
                 "supports the certified 'sacsma' adapter."
             )
 
-        cfe_pf = SidecarSACSMAPFBinding(
+        runoff_pf = SidecarSACSMAPFBinding(
             members,
             resolved_output / "sacsma-pf",
             pf_random_seed=pf_random_seed,
@@ -1023,7 +1023,7 @@ class PersistentTRouteEnsembleAnalyzer:
         self._localization_cutoff_m = float(
             localization_cutoff_m
         )
-        self._cfe_pf = cfe_pf
+        self._runoff_pf = runoff_pf
         self._runoff_pf_model = runoff_pf_model
         self._output_root = resolved_output
         self._simulation_start_epoch = int(
@@ -1631,7 +1631,7 @@ class PersistentTRouteEnsembleAnalyzer:
             pf_cycle = None
             pf_cycle_error = None
             pf_decision = None
-            cfe_pf_diagnostics: dict[str, object] | None = None
+            runoff_pf_diagnostics: dict[str, object] | None = None
 
             if target_time > 0.0:
                 pf_cycle = CycleWindow.for_interval(
@@ -1646,7 +1646,7 @@ class PersistentTRouteEnsembleAnalyzer:
                     ),
                 )
                 try:
-                    self._cfe_pf.register_cycle(pf_cycle)
+                    self._runoff_pf.register_cycle(pf_cycle)
                 except Exception as error:
                     pf_cycle_error = error
 
@@ -1752,7 +1752,7 @@ class PersistentTRouteEnsembleAnalyzer:
 
             if (
                 routing_outcome is not None
-                and self._cfe_pf.enabled
+                and self._runoff_pf.enabled
             ):
                 if pf_cycle_error is not None:
                     status = (
@@ -1861,7 +1861,7 @@ class PersistentTRouteEnsembleAnalyzer:
                                     ),
                                 }
 
-                        pf_decision = self._cfe_pf.analyze(
+                        pf_decision = self._runoff_pf.analyze(
                             run_id=run_id,
                             cycle=pf_cycle,
                             requests=prepared_state_requests,
@@ -1883,7 +1883,7 @@ class PersistentTRouteEnsembleAnalyzer:
                             "routing_analysis_cfe_pf_weight_update"
                         )
 
-                        cfe_pf_diagnostics = {
+                        runoff_pf_diagnostics = {
                             # Pre-resampling SIR importance probabilities.
                             "posterior_weights": (
                                 pf_decision.plan.posterior_weights.tolist()
@@ -1912,11 +1912,11 @@ class PersistentTRouteEnsembleAnalyzer:
                             (),
                         ):
 
-                            cfe_pf_diagnostics[
+                            runoff_pf_diagnostics[
                                 "multiblock"
                             ] = True
 
-                            cfe_pf_diagnostics[
+                            runoff_pf_diagnostics[
                                 "blocks"
                             ] = [
                                 {
@@ -1978,7 +1978,7 @@ class PersistentTRouteEnsembleAnalyzer:
                 routing_forecast_state=(
                     routing_forecast_state
                 ),
-                cfe_pf=cfe_pf_diagnostics,
+                cfe_pf=runoff_pf_diagnostics,
             )
 
             binding = self._observation_binding
