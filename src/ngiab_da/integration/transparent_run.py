@@ -29,6 +29,9 @@ import time
 from typing import Any, Iterable, Mapping, Sequence
 
 from ngiab_da.integration.ngiab_run import discover_ngiab_run
+from ngiab_da.integration.runoff_pf_compat import (
+    resolve_runoff_pf_enabled,
+)
 
 
 
@@ -1640,8 +1643,16 @@ def _launch_sidecar(
     max_requests: int | None,
     timeout_seconds: float,
     pf_random_seed: int | None = None,
-    cfe_pf_enabled: bool = True,
+    runoff_pf_enabled: bool | None = None,
+    cfe_pf_enabled: bool | None = None,
 ) -> tuple[subprocess.Popen[Any], Any, Any]:
+    resolved_runoff_pf_enabled = (
+        resolve_runoff_pf_enabled(
+            runoff_pf_enabled=runoff_pf_enabled,
+            cfe_pf_enabled=cfe_pf_enabled,
+        )
+    )
+
     stdout_path = plan.workspace / "logs/sidecar.stdout.txt"
     stderr_path = plan.workspace / "logs/sidecar.stderr.txt"
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1790,8 +1801,8 @@ def _launch_sidecar(
             ]
         )
 
-    if not cfe_pf_enabled:
-        command.append("--disable-cfe-pf")
+    if not resolved_runoff_pf_enabled:
+        command.append("--disable-runoff-pf")
 
     if max_requests is not None:
         command.extend(
@@ -2930,11 +2941,19 @@ def execute_transparent_run(
     validation_window_end_epoch_seconds: int | None = None,
     preserve_simulation_window: bool = False,
     pf_random_seed: int | None = None,
-    cfe_pf_enabled: bool = True,
+    runoff_pf_enabled: bool | None = None,
+    cfe_pf_enabled: bool | None = None,
     spatial_operator_path: str | Path | None = None,
     spatial_operator_sha256: str | None = None,
     precip_temperature_correlation: float | None = None,
 ) -> Path:
+    resolved_runoff_pf_enabled = (
+        resolve_runoff_pf_enabled(
+            runoff_pf_enabled=runoff_pf_enabled,
+            cfe_pf_enabled=cfe_pf_enabled,
+        )
+    )
+
     if observation_site_ids is not None:
         if isinstance(observation_site_ids, (str, bytes)):
             raise TypeError(
@@ -3048,10 +3067,6 @@ def execute_transparent_run(
 
     if timeout_seconds <= 0.0:
         raise ValueError("timeout_seconds must be positive.")
-    if not isinstance(cfe_pf_enabled, bool):
-        raise TypeError(
-            "cfe_pf_enabled must be a boolean."
-        )
 
 
 
@@ -3129,7 +3144,7 @@ def execute_transparent_run(
     )
 
     if (
-        not cfe_pf_enabled
+        not resolved_runoff_pf_enabled
         and plan.executed_capability
         == "cfe_pf_and_routing_ensrf"
     ):
@@ -3363,7 +3378,9 @@ def execute_transparent_run(
             ),
             timeout_seconds=timeout_seconds,
             pf_random_seed=pf_random_seed,
-            cfe_pf_enabled=cfe_pf_enabled,
+            runoff_pf_enabled=(
+                resolved_runoff_pf_enabled
+            ),
             observation_site_ids=observation_site_ids,
         )
         streams.extend((sidecar_stdout, sidecar_stderr))
@@ -3437,7 +3454,7 @@ def execute_transparent_run(
                         forcing_configuration
                     ),
                     "observation_mode": observation_mode,
-                    "cfe_pf_enabled": cfe_pf_enabled,
+                    "cfe_pf_enabled": resolved_runoff_pf_enabled,
                     "runoff_pf_response_policy": (
                         "direct_inplace_pf_ancestry"
                         if final_status_plan.executed_capability
@@ -3601,7 +3618,9 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--disable-runoff-pf",
         "--disable-cfe-pf",
+        dest="disable_runoff_pf",
         action="store_true",
         help=(
             "Disable runoff particle-filter weighting "
@@ -3744,8 +3763,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         additive_forcing_errors=additive_forcing_errors,
         forcing_random_seed=args.forcing_random_seed,
         pf_random_seed=args.pf_random_seed,
-        cfe_pf_enabled=(
-            not args.disable_cfe_pf
+        runoff_pf_enabled=(
+            not args.disable_runoff_pf
         ),
         observation_site_ids=args.observation_site_ids,
     )

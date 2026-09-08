@@ -30,6 +30,9 @@ import numpy as np
 
 from ngiab_da.engine.cycle import CycleWindow
 
+from ngiab_da.integration.runoff_pf_compat import (
+    resolve_runoff_pf_enabled,
+)
 from ngiab_da.integration.sacsma_pf_binding import (
     SidecarSACSMAPFBinding,
 )
@@ -709,7 +712,8 @@ class PersistentTRouteEnsembleAnalyzer:
         usgs_options: Mapping[str, Any] | None = None,
         observation_site_ids: Sequence[str] | None = None,
         localization_cutoff_m: float = 100_000.0,
-        cfe_pf_enabled: bool = True,
+        runoff_pf_enabled: bool | None = None,
+        cfe_pf_enabled: bool | None = None,
         pf_random_seed: int | None = None,
     ) -> None:
         members = tuple(str(value) for value in member_ids)
@@ -951,11 +955,18 @@ class PersistentTRouteEnsembleAnalyzer:
                 "supports the certified 'sacsma' adapter."
             )
 
+        resolved_runoff_pf_enabled = (
+            resolve_runoff_pf_enabled(
+                runoff_pf_enabled=runoff_pf_enabled,
+                cfe_pf_enabled=cfe_pf_enabled,
+            )
+        )
+
         runoff_pf = SidecarSACSMAPFBinding(
             members,
             resolved_output / "sacsma-pf",
             pf_random_seed=pf_random_seed,
-            enabled=cfe_pf_enabled,
+            enabled=resolved_runoff_pf_enabled,
         )
 
         self._member_ids = members
@@ -2176,7 +2187,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--disable-runoff-pf",
         "--disable-cfe-pf",
+        dest="disable_runoff_pf",
         action="store_true",
         help=(
             "Disable runoff particle-filter weighting "
@@ -2221,8 +2234,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_root=args.output_root,
         observation_provider=observation_provider,
         localization_cutoff_m=args.localization_cutoff_m,
-        cfe_pf_enabled=(
-            not args.disable_cfe_pf
+        runoff_pf_enabled=(
+            not args.disable_runoff_pf
         ),
         pf_random_seed=args.pf_random_seed,
         observation_site_ids=args.observation_site_ids,

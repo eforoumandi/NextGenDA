@@ -11,7 +11,16 @@ class LegacyV5CompatibilityError(
 
 _GENERIC_TO_BACKEND = {
     "particle_filter_enabled":
-        "cfe_pf_enabled",
+        "runoff_pf_enabled",
+
+}
+
+
+_BACKEND_COMPATIBILITY_ALIASES = {
+    "particle_filter_enabled":
+        (
+            "cfe_pf_enabled",
+        ),
 
 }
 
@@ -40,12 +49,22 @@ def to_backend_runtime_kwargs(
                 f"{generic_name!r}."
             )
 
-        if backend_name in result:
-            raise LegacyV5CompatibilityError(
-                "Generic runtime arguments must not "
-                "contain legacy backend name "
-                f"{backend_name!r}."
-            )
+        protected_backend_names = (
+            backend_name,
+            *_BACKEND_COMPATIBILITY_ALIASES.get(
+                generic_name,
+                (),
+            ),
+        )
+
+        for protected_name in protected_backend_names:
+
+            if protected_name in result:
+                raise LegacyV5CompatibilityError(
+                    "Generic runtime arguments must not "
+                    "contain backend control name "
+                    f"{protected_name!r}."
+                )
 
         result[
             backend_name
