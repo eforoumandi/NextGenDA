@@ -742,264 +742,6 @@ def _load_nicas_spatial_operator(
     )
 
 
-def _nicas_joint_latent_ar1(
-    *,
-    member_count: int,
-    catchment_ids: Sequence[str],
-    time_count: int,
-    phi: float,
-    seed: int,
-    operator_path: str | Path,
-    operator_sha256: str,
-    precip_temperature_correlation: float,
-) -> tuple[np.ndarray, dict[str, Any]]:
-    """Generate P/T latent AR(1) fields from a NICAS spatial square root.
-
-    The spatial operator U is applied directly to independent standard
-    normal subgrid innovations.  A 2x2 variable square root then imposes
-    the explicitly supplied precipitation-temperature correlation.
-
-    No dense catchment covariance and no dense Cholesky factor are formed.
-    """
-
-    if member_count < 2:
-        raise NativeMemberForcingError(
-            "NICAS joint forcing requires at least two members."
-        )
-
-    if time_count < 1:
-        raise NativeMemberForcingError(
-            "NICAS joint forcing requires at least one time interval."
-        )
-
-    temporal = float(
-        phi
-    )
-
-    if not (
-        -1.0
-        <
-        temporal
-        <
-        1.0
-    ):
-        raise NativeMemberForcingError(
-            "Temporal AR(1) phi must lie strictly within (-1, 1)."
-        )
-
-    cross = float(
-        precip_temperature_correlation
-    )
-
-    if not (
-        -1.0
-        <
-        cross
-        <
-        1.0
-    ):
-        raise NativeMemberForcingError(
-            "Precipitation-temperature latent correlation must "
-            "be explicitly supplied within (-1, 1)."
-        )
-
-    spatial_square_root, metadata = (
-        _load_nicas_spatial_operator(
-            operator_path=operator_path,
-            expected_sha256=operator_sha256,
-            catchment_ids=catchment_ids,
-        )
-    )
-
-    catchment_count = len(
-        tuple(
-            catchment_ids
-        )
-    )
-
-    latent_dimension = int(
-        spatial_square_root.shape[1]
-    )
-
-    variable_correlation = np.asarray(
-        [
-            [
-                1.0,
-                cross,
-            ],
-            [
-                cross,
-                1.0,
-            ],
-        ],
-        dtype=np.float64,
-    )
-
-    # Exact analytic Cholesky of the 2x2 cross-variable matrix.
-    # This is not a spatial Cholesky operation.
-    variable_square_root = np.asarray(
-        [
-            [
-                1.0,
-                0.0,
-            ],
-            [
-                cross,
-                np.sqrt(
-                    1.0
-                    -
-                    cross
-                    *
-                    cross
-                ),
-            ],
-        ],
-        dtype=np.float64,
-    )
-
-    rng = np.random.default_rng(
-        int(seed)
-    )
-
-    def innovation() -> np.ndarray:
-
-        white = rng.standard_normal(
-            (
-                latent_dimension,
-                member_count
-                *
-                2,
-            )
-        )
-
-        spatial = (
-            spatial_square_root
-            @
-            white
-        )
-
-        spatial = np.asarray(
-            spatial,
-            dtype=np.float64,
-        )
-
-        spatial = (
-            spatial.T
-            .reshape(
-                member_count,
-                2,
-                catchment_count,
-            )
-        )
-
-        return np.einsum(
-            "ab,mbc->mac",
-            variable_square_root,
-            spatial,
-            optimize=True,
-        )
-
-    values = np.empty(
-        (
-            member_count,
-            2,
-            catchment_count,
-            time_count,
-        ),
-        dtype=np.float64,
-    )
-
-    current = innovation()
-
-    values[
-        :,
-        :,
-        :,
-        0,
-    ] = current
-
-    innovation_scale = np.sqrt(
-        1.0
-        -
-        temporal
-        *
-        temporal
-    )
-
-    for time_index in range(
-        1,
-        time_count,
-    ):
-
-        current = (
-            temporal
-            *
-            current
-            +
-            innovation_scale
-            *
-            innovation()
-        )
-
-        values[
-            :,
-            :,
-            :,
-            time_index,
-        ] = current
-
-    payload = {
-        "schema_version":
-            1,
-
-        "catchment_ids": [
-            str(value)
-            for value
-            in catchment_ids
-        ],
-
-        **metadata,
-
-        "cross_variable": {
-            "order": [
-                "precipitation",
-                "TMP_2maboveground",
-            ],
-
-            "matrix":
-                variable_correlation.tolist(),
-
-            "correlation_source":
-                "explicit_user_configuration",
-        },
-
-        "temporal": {
-            "model":
-                "stationary_ar1",
-
-            "phi":
-                temporal,
-        },
-
-        "randomization": {
-            "seed":
-                int(seed),
-
-            "spatial_square_root":
-                "NICAS",
-
-            "dense_spatial_covariance":
-                False,
-
-            "dense_spatial_cholesky":
-                False,
-        },
-    }
-
-    return (
-        values,
-        payload,
-    )
 
 
 class _NicasJointAR1Stream:
@@ -1013,7 +755,7 @@ class _NicasJointAR1Stream:
 
     Its random-number consumption, spatial square-root application,
     cross-variable transform, stationary initialization, and AR(1)
-    recursion intentionally match _nicas_joint_latent_ar1 exactly.
+    recursion preserve the validated joint NICAS latent-process contract.
     """
 
     def __init__(
@@ -3714,56 +3456,27 @@ def generate_native_member_forcings(
 
     # STAGE6D_D3_GENERALIZED_STREAMING_EARLY_RETURN_END
 
-    if spatial_operator_path is None:
-        if spatial_operator_sha256 is not None:
-            raise NativeMemberForcingError(
-                "spatial_operator_sha256 requires spatial_operator_path."
-            )
-        if precip_temperature_correlation is not None:
-            raise NativeMemberForcingError(
-                "precip_temperature_correlation is only accepted "
-                "with an explicit generalized spatial operator."
-            )
-
-        (
-            _v15_joint_latent,
-            _v15_joint_design_payload,
-        ) = _v15_joint_latent_ar1(
-            member_count=member_count,
-            catchment_ids=catchment_ids,
-            time_count=times.size,
-            phi=temporal_correlation,
-            seed=precipitation_seed,
+    # Generalized NICAS execution returns above; reaching this point implies spatial_operator_path is None.
+    if spatial_operator_sha256 is not None:
+        raise NativeMemberForcingError(
+            "spatial_operator_sha256 requires spatial_operator_path."
+        )
+    if precip_temperature_correlation is not None:
+        raise NativeMemberForcingError(
+            "precip_temperature_correlation is only accepted "
+            "with an explicit generalized spatial operator."
         )
 
-    else:
-        if spatial_operator_sha256 is None:
-            raise NativeMemberForcingError(
-                "Generalized spatial forcing requires an explicit "
-                "spatial_operator_sha256."
-            )
-
-        if precip_temperature_correlation is None:
-            raise NativeMemberForcingError(
-                "Generalized spatial forcing requires an explicit "
-                "precip_temperature_correlation supplied by the user."
-            )
-
-        (
-            _v15_joint_latent,
-            _v15_joint_design_payload,
-        ) = _nicas_joint_latent_ar1(
-            member_count=member_count,
-            catchment_ids=catchment_ids,
-            time_count=times.size,
-            phi=temporal_correlation,
-            seed=precipitation_seed,
-            operator_path=spatial_operator_path,
-            operator_sha256=spatial_operator_sha256,
-            precip_temperature_correlation=(
-                precip_temperature_correlation
-            ),
-        )
+    (
+        _v15_joint_latent,
+        _v15_joint_design_payload,
+    ) = _v15_joint_latent_ar1(
+        member_count=member_count,
+        catchment_ids=catchment_ids,
+        time_count=times.size,
+        phi=temporal_correlation,
+        seed=precipitation_seed,
+    )
 
     precipitation_latent = (
         _v15_joint_latent[:, 0, :, :]
