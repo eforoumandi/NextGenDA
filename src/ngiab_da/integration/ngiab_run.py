@@ -131,7 +131,7 @@ class NgiabRunPackage:
         # CFE PF through the validated native NextGen hook path,
         # including realizations that require full NextGen execution.
         if self.cfe_present:
-            return "cfe_pf_and_routing_ensrf"
+            return "routing_ensrf_plus_runoff_pf"
         return "routing_ensrf_only"
 
     def to_payload(self) -> dict[str, Any]:

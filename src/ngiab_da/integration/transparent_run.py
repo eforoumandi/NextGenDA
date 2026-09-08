@@ -74,6 +74,7 @@ class TransparentRunPlan:
     forcing_relative_path: Path
     cycle_count: int
     native_nudging_enabled: bool
+    runoff_pf_model_key: str | None = None
 
 
 def _utc_run_id() -> str:
@@ -578,7 +579,7 @@ def _capability_name(package: Any) -> str:
     if gauge_count <= 0 or not routing:
         return "no_da"
     if cfe:
-        return "cfe_pf_and_routing_ensrf"
+        return "routing_ensrf_plus_runoff_pf"
     return "routing_ensrf_only"
 
 
@@ -615,6 +616,48 @@ def _native_nudging_enabled(package: Any) -> bool:
     return False
 
 
+
+def _runtime_runoff_pf_model_key(
+    package: Any,
+) -> str | None:
+    """
+    Resolve runoff-model identity independently from DA capability.
+
+    Literal CFE model presence takes precedence over the generic
+    runtime registry. Other runoff models are selected through
+    NGIAB_DA_RUNOFF_PF_MODEL.
+    """
+
+    cfe_value = _first_attribute(
+        package,
+        (
+            "cfe_present",
+        ),
+    )
+
+    if cfe_value is None:
+        cfe_value = _metadata_value(
+            package,
+            (
+                "cfe_present",
+            ),
+        )
+
+    if bool(cfe_value):
+        return "cfe"
+
+    value = os.environ.get(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        "",
+    ).strip().lower()
+
+    return (
+        value
+        if value
+        else None
+    )
+
+
 def _execution_capability(
     package: Any,
 ) -> tuple[str, tuple[str, ...]]:
@@ -627,8 +670,11 @@ def _execution_capability(
         return "no_da", ("native_troute_nudging_conflict",)
     if requested == "routing_ensrf_only":
         return requested, ()
-    if requested == "cfe_pf_and_routing_ensrf":
-        return requested, ()
+    if requested in (
+        "routing_ensrf_plus_runoff_pf",
+        "cfe_pf_and_routing_ensrf",
+    ):
+        return "routing_ensrf_plus_runoff_pf", ()
     return "no_da", (f"unsupported_capability:{requested}",)
 
 
@@ -1180,6 +1226,11 @@ def build_transparent_run_plan(
         ),
         native_nudging_enabled=(
             _native_nudging_enabled(package)
+        ),
+        runoff_pf_model_key=(
+            _runtime_runoff_pf_model_key(
+                package
+            )
         ),
     )
 
@@ -1896,16 +1947,42 @@ def _launch_member(
         getattr(
             plan,
             "executed_capability",
-            "cfe_pf_and_routing_ensrf",
+            "routing_ensrf_plus_runoff_pf",
         )
     )
 
-    runoff_pf_model = os.environ.get(
-        "NGIAB_DA_RUNOFF_PF_MODEL",
-        "",
-    ).strip().lower()
+    runoff_pf_model = (
+        _declared_runoff_pf_model_key(
+            plan
+        )
+        or ""
+    )
 
-    if executed_capability == "routing_ensrf_only":
+    backend_capability = (
+        executed_capability
+    )
+
+    if (
+        executed_capability
+        ==
+        "routing_ensrf_plus_runoff_pf"
+    ):
+        if not runoff_pf_model:
+            stdout_stream.close()
+            stderr_stream.close()
+
+            raise TransparentRunError(
+                "routing_ensrf_plus_runoff_pf requires "
+                "an explicit runoff-PF model identity."
+            )
+
+        backend_capability = (
+            "cfe_pf_and_routing_ensrf"
+            if runoff_pf_model == "cfe"
+            else "routing_ensrf_only"
+        )
+
+    if backend_capability == "routing_ensrf_only":
         if runoff_pf_model not in ("", "cfe"):
             runoff_hook_artifacts = (
                 getattr(
@@ -2025,7 +2102,7 @@ def _launch_member(
                     "unexpected filename."
                 )
 
-    elif executed_capability == "cfe_pf_and_routing_ensrf":
+    elif backend_capability == "cfe_pf_and_routing_ensrf":
         hook_artifact = Path(
             artifacts.sequential_artifact
         )
@@ -2213,19 +2290,46 @@ def _declared_runoff_pf_model_key(
     plan: TransparentRunPlan,
 ) -> str | None:
     """
-    Return the runtime runoff-PF registry key.
+    Return the explicit runtime runoff-PF registry key.
 
-    CFE retains its legacy backend capability contract.
-    Other runoff models are selected through the generic
-    NGIAB_DA_RUNOFF_PF_MODEL registry.
+    New plans carry model identity independently from capability.
+    Legacy CFE capability values remain accepted so historical
+    plans continue to resolve to the CFE backend.
     """
+
+    explicit = getattr(
+        plan,
+        "runoff_pf_model_key",
+        None,
+    )
+
+    if explicit is not None:
+        value = str(
+            explicit
+        ).strip().lower()
+
+        if not value:
+            raise TransparentRunError(
+                "runoff_pf_model_key must not be empty "
+                "when explicitly supplied."
+            )
+
+        return value
 
     legacy = {
         str(
-            plan.requested_capability
+            getattr(
+                plan,
+                "requested_capability",
+                "",
+            )
         ),
         str(
-            plan.executed_capability
+            getattr(
+                plan,
+                "executed_capability",
+                "",
+            )
         ),
     }
 
@@ -2265,6 +2369,16 @@ def _model_neutral_capability(
 
         return (
             _MODEL_NEUTRAL_NO_DA
+        )
+
+    if (
+        value
+        ==
+        _MODEL_NEUTRAL_ROUTING_ENSRF_PLUS_RUNOFF_PF
+    ):
+
+        return (
+            _MODEL_NEUTRAL_ROUTING_ENSRF_PLUS_RUNOFF_PF
         )
 
     if (
@@ -2377,9 +2491,9 @@ def _assimilation_architecture_payload(
     executed:
         Capability represented by the durable runtime phase.
 
-    Legacy capability values remain untouched inside TransparentRunPlan
-    because they are still part of the validated legacy-v5 hook-selection
-    contract.
+    Newly built plans use model-neutral capability values and carry
+    runoff-model identity separately. Legacy capability values remain
+    accepted and are retained in compatibility provenance when supplied.
     """
 
     runoff_pf_model_key = (
@@ -3146,7 +3260,10 @@ def execute_transparent_run(
     if (
         not resolved_runoff_pf_enabled
         and plan.executed_capability
-        == "cfe_pf_and_routing_ensrf"
+        in (
+            "routing_ensrf_plus_runoff_pf",
+            "cfe_pf_and_routing_ensrf",
+        )
     ):
         plan = replace(
             plan,
@@ -3458,7 +3575,10 @@ def execute_transparent_run(
                     "runoff_pf_response_policy": (
                         "direct_inplace_pf_ancestry"
                         if final_status_plan.executed_capability
-                        == "cfe_pf_and_routing_ensrf"
+                        in (
+                            "routing_ensrf_plus_runoff_pf",
+                            "cfe_pf_and_routing_ensrf",
+                        )
                         else "identity_routing_only"
                     ),
                 },

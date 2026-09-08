@@ -368,7 +368,7 @@ class NgiabRuntimeDomain:
         # Python runtime can execute CFE by itself.  Transparent DA
         # uses native NextGen whenever full execution is required.
         if self.run_package.cfe_present:
-            return "cfe_pf_and_routing_ensrf"
+            return "routing_ensrf_plus_runoff_pf"
         return "routing_ensrf_only"
 
     def to_payload(self) -> dict[str, Any]:

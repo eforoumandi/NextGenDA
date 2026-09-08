@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 
 from ngiab_da.integration.transparent_run import (
     TransparentRunPlan,
+    _declared_runoff_pf_model_key,
+    _execution_capability,
     _status_payload,
 )
 
@@ -15,6 +18,7 @@ def _plan(
     *,
     requested: str = "routing_ensrf_only",
     resolved: str = "routing_ensrf_only",
+    runoff_pf_model_key: str | None = None,
 ) -> TransparentRunPlan:
 
     return TransparentRunPlan(
@@ -54,6 +58,10 @@ def _plan(
         cycle_count=10,
 
         native_nudging_enabled=False,
+
+        runoff_pf_model_key=(
+            runoff_pf_model_key
+        ),
     )
 
 
@@ -262,6 +270,122 @@ def test_true_routing_only_remains_routing_only(
             "runoff_pf_model_key"
         ]
         is None
+    )
+
+
+
+def test_internal_capability_resolver_canonicalizes_legacy_and_neutral(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        raising=False,
+    )
+
+    legacy_package = SimpleNamespace(
+        assimilation_capability=(
+            "cfe_pf_and_routing_ensrf"
+        ),
+        gauges=(
+            object(),
+        ),
+        native_streamflow_nudging=False,
+    )
+
+    neutral_package = SimpleNamespace(
+        assimilation_capability=(
+            "routing_ensrf_plus_runoff_pf"
+        ),
+        gauges=(
+            object(),
+        ),
+        native_streamflow_nudging=False,
+    )
+
+    assert _execution_capability(
+        legacy_package
+    ) == (
+        "routing_ensrf_plus_runoff_pf",
+        (),
+    )
+
+    assert _execution_capability(
+        neutral_package
+    ) == (
+        "routing_ensrf_plus_runoff_pf",
+        (),
+    )
+
+
+def test_model_neutral_capability_carries_explicit_cfe_model_identity(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        raising=False,
+    )
+
+    plan = _plan(
+        tmp_path,
+        requested=(
+            "routing_ensrf_plus_runoff_pf"
+        ),
+        resolved=(
+            "routing_ensrf_plus_runoff_pf"
+        ),
+        runoff_pf_model_key="cfe",
+    )
+
+    assert (
+        _declared_runoff_pf_model_key(
+            plan
+        )
+        ==
+        "cfe"
+    )
+
+    payload = _status(
+        plan,
+        phase="completed_routing_da",
+    )
+
+    assert (
+        payload[
+            "requested_capability"
+        ]
+        ==
+        "routing_ensrf_plus_runoff_pf"
+    )
+
+    assert (
+        payload[
+            "resolved_capability"
+        ]
+        ==
+        "routing_ensrf_plus_runoff_pf"
+    )
+
+    assert (
+        payload[
+            "assimilation_architecture"
+        ][
+            "runoff_pf_model_key"
+        ]
+        ==
+        "cfe"
+    )
+
+    assert (
+        payload[
+            "assimilation_architecture"
+        ][
+            "legacy_backend"
+        ][
+            "requested_capability"
+        ]
+        ==
+        "routing_ensrf_plus_runoff_pf"
     )
 
 
