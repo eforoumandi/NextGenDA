@@ -147,8 +147,16 @@ ADAPTER = ModelAdapter(
     realization_patterns=(
         compile_realization_patterns(
             (
-                r"\bsac[\s_-]*sma\b",
-                r"\bsacsma\b",
+                (
+                    r"(?s)\A"
+                    r"(?!.*(?:\bSNOW17\b|libsnow17bmi\.so))"
+                    r"(?=.*(?:"
+                    r"\bsac[\s_-]*sma\b"
+                    r"|\bsacsma\b"
+                    r"|bmi_fortran_sac"
+                    r"|libsacbmi\.so"
+                    r")).*\Z"
+                ),
             )
         )
     ),

@@ -73,6 +73,11 @@ class PreparationResult:
 
     dry_run: bool
 
+    additional_commands: tuple[
+        tuple[str, ...],
+        ...
+    ] = ()
+
 
 class PreparationError(RuntimeError):
     pass
@@ -608,6 +613,10 @@ def _build_manifest(
     command: Sequence[str],
     package: Path,
     model: str,
+    additional_commands: Sequence[
+        Sequence[str]
+    ] = (),
+    model_composition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     inspection = (
         inspect_run_package(
@@ -787,6 +796,22 @@ def _build_manifest(
                     command
                 ),
 
+            "additional_argv": [
+                list(
+                    value
+                )
+                for value in additional_commands
+            ],
+
+            "additional_shell_display": [
+                shlex.join(
+                    list(
+                        value
+                    )
+                )
+                for value in additional_commands
+            ],
+
             "shell_display":
                 shlex.join(
                     list(
@@ -853,6 +878,9 @@ def _build_manifest(
 
         "file_provenance":
             file_provenance,
+
+        "model_composition":
+            model_composition,
 
         "parameter_provenance": {
             "status":
@@ -1018,6 +1046,37 @@ def prepare_run_package(
         ),
     )
 
+    additional_commands: tuple[
+        tuple[str, ...],
+        ...
+    ] = ()
+
+    if (
+        adapter.preparation_workflow
+        == "snow17-sac-sma"
+    ):
+
+        from nextgenda.prep.snow17_sac_sma import (
+            build_sacsma_followup_command,
+        )
+
+        additional_commands = (
+            build_sacsma_followup_command(
+                command
+            ),
+        )
+
+    elif (
+        adapter.preparation_workflow
+        != "single"
+    ):
+
+        raise PreparationError(
+            "Unknown model-adapter preparation workflow: "
+            f"{adapter.preparation_workflow!r}."
+        )
+
+
     if dry_run:
         return PreparationResult(
             request=request,
@@ -1029,6 +1088,10 @@ def prepare_run_package(
             prepared_package=None,
             manifest_path=None,
             dry_run=True,
+
+            additional_commands=(
+                additional_commands
+            ),
         )
 
     before = (
@@ -1157,6 +1220,111 @@ def prepare_run_package(
         )
     )
 
+
+    model_composition: (
+        dict[str, Any]
+        | None
+    ) = None
+
+
+    if additional_commands:
+
+        from nextgenda.prep.snow17_sac_sma import (
+            capture_primary_snow17_realization,
+            compose_snow17_sac_sma_realization,
+        )
+
+        #
+        # Preserve NGIAB's first-pass Snow17 realization before the
+        # second untouched NGIAB realization-generation pass overwrites
+        # config/realization.json.
+        #
+        snow17_payload = (
+            capture_primary_snow17_realization(
+                package
+            )
+        )
+
+
+        for index, followup_command in enumerate(
+            additional_commands,
+            start=1,
+        ):
+
+            followup_stdout = (
+                log_root
+                / f"followup-{index:02d}-stdout.txt"
+            )
+
+            followup_stderr = (
+                log_root
+                / f"followup-{index:02d}-stderr.txt"
+            )
+
+            followup_command_path = (
+                log_root
+                / f"followup-{index:02d}-command.txt"
+            )
+
+            followup_command_path.write_text(
+                shlex.join(
+                    list(
+                        followup_command
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+
+            with (
+                followup_stdout.open(
+                    "w",
+                    encoding="utf-8",
+                )
+                as stdout_stream,
+
+                followup_stderr.open(
+                    "w",
+                    encoding="utf-8",
+                )
+                as stderr_stream
+            ):
+
+                followup_process = subprocess.run(
+                    list(
+                        followup_command
+                    ),
+                    check=False,
+                    stdout=stdout_stream,
+                    stderr=stderr_stream,
+                    text=True,
+                )
+
+
+            if (
+                followup_process.returncode
+                != 0
+            ):
+
+                raise PreparationError(
+                    "The coupled-model NGIAB follow-up "
+                    "realization generation failed. "
+                    f"stdout={followup_stdout}; "
+                    f"stderr={followup_stderr}"
+                )
+
+
+        model_composition = (
+            compose_snow17_sac_sma_realization(
+                package,
+                snow17_payload=(
+                    snow17_payload
+                ),
+            )
+        )
+
+
     manifest = _build_manifest(
         request=request,
         backend=backend,
@@ -1164,6 +1332,14 @@ def prepare_run_package(
         command=command,
         package=package,
         model=adapter.name,
+
+        additional_commands=(
+            additional_commands
+        ),
+
+        model_composition=(
+            model_composition
+        ),
     )
 
     manifest_path = (
@@ -1226,4 +1402,8 @@ def prepare_run_package(
             manifest_path
         ),
         dry_run=False,
+
+        additional_commands=(
+            additional_commands
+        ),
     )

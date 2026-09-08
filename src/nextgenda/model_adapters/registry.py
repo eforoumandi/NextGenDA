@@ -274,27 +274,38 @@ def _contract_model(
 def default_model_adapter(
 ) -> ModelAdapter:
     """
-    Return the only registered model adapter.
+    Return the legacy programmatic default model adapter.
 
-    A default is safe only while exactly one adapter is registered.
-    Once multiple model adapters exist, callers must either identify
-    the model from a prepared realization or request one explicitly.
+    User-facing NextGenDA entry points require an explicit model choice
+    once multiple physical-model configurations are registered.
+
+    The programmatic fallback remains SAC-SMA-only so existing Python
+    integrations that historically omitted `model=` do not silently
+    change physical model structure.
     """
 
     adapters = (
         registered_model_adapters()
     )
 
-    if len(adapters) != 1:
+    matches = [
+        adapter
 
-        raise ModelRegistryError(
-            "No unambiguous default model adapter exists. "
-            f"Registered models={tuple(item.name for item in adapters)}."
-        )
+        for adapter in adapters
 
-    return adapters[
-        0
+        if adapter.name == "sac-sma"
     ]
+
+    if len(matches) == 1:
+        return matches[0]
+
+    if len(adapters) == 1:
+        return adapters[0]
+
+    raise ModelRegistryError(
+        "No legacy SAC-SMA default model adapter is registered. "
+        f"Registered models={tuple(item.name for item in adapters)}."
+    )
 
 
 def select_model_adapter(
@@ -407,6 +418,45 @@ def detect_model_adapter_from_package(
             contract_model
         )
 
+
+    #
+    # The canonical active NextGen realization is authoritative.
+    #
+    # Prepared packages may intentionally retain additional realization
+    # JSON files for provenance, debugging, or construction history.
+    # Those files are not executed by NextGen and therefore must not
+    # participate in runtime model identity when config/realization.json
+    # exists.
+    #
+    canonical_realization = (
+        package
+        / "config"
+        / "realization.json"
+    )
+
+    if canonical_realization.is_file():
+
+        try:
+
+            return (
+                detect_model_adapter_from_realization(
+                    canonical_realization
+                )
+            )
+
+        except ModelRegistryError as exc:
+
+            raise ModelRegistryError(
+                "Canonical prepared-package realization "
+                "could not be uniquely resolved: "
+                f"{canonical_realization}. {exc}"
+            ) from exc
+
+
+    #
+    # Legacy/fallback discovery is retained only for packages that do
+    # not expose the standard canonical realization location.
+    #
     candidates = sorted(
         path
         for path in package.rglob(
@@ -592,7 +642,10 @@ def apply_perturbation_configuration_to_environment(
         return result
 
 
-    if adapter.name != "sac-sma":
+    if adapter.name not in {
+        "sac-sma",
+        "snow17-sac-sma",
+    }:
 
         raise ModelRegistryError(
             "SAC-SMA state-perturbation overrides "

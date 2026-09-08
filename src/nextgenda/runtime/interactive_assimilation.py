@@ -1570,8 +1570,10 @@ def main() -> int:
     )
 
     model = _prompt_text(
-        "Rainfall–runoff model",
-        default="sac-sma",
+        (
+            "Rainfall–runoff model "
+            "(sac-sma/snow17-sac-sma)"
+        )
     )
 
     calibration_start = _prompt_date(

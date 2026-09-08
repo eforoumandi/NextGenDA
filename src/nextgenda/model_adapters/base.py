@@ -59,6 +59,14 @@ class ModelAdapter:
         | None
     ) = None
 
+    #
+    # Most model adapters are prepared by one ordinary pinned-NGIAB
+    # preprocessing command.  A coupled physical model may require
+    # multiple untouched NGIAB realization-generation passes followed
+    # by deterministic NextGenDA composition.
+    #
+    preparation_workflow: str = "single"
+
 
     def normalized_aliases(
         self,

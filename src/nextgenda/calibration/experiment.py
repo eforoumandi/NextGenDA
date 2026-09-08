@@ -174,6 +174,16 @@ def build_experiment_specification(
         )
 
 
+    if not adapter.assimilation_supported:
+
+        raise ExperimentSpecificationError(
+            "The selected registered model does "
+            "not currently provide a validated "
+            "data-assimilation adapter: "
+            f"{adapter.name!r}."
+        )
+
+
     selected_model = (
         adapter.name
     )

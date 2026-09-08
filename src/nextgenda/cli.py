@@ -536,6 +536,112 @@ def _prepare(
 # ================================================================================================
 
 
+
+def _calibrate(
+    args,
+) -> int:
+
+    from nextgenda.calibration.runner import (
+        run_calibration,
+    )
+
+
+    project_root = (
+        Path(__file__)
+        .resolve()
+        .parents[2]
+    )
+
+
+    result = run_calibration(
+        project_root=project_root,
+
+        prepared_package=(
+            args.prepared_package
+        ),
+
+        observation_path=(
+            args.observations
+        ),
+
+        calibration_start=(
+            args.cal_start
+        ),
+
+        calibration_end_exclusive=(
+            args.cal_end_exclusive
+        ),
+
+        iterations_total=(
+            args.iterations
+        ),
+
+        perturbation=(
+            args.perturbation
+        ),
+
+        expected_pairs=(
+            args.expected_pairs
+        ),
+
+        output_root=(
+            args.output_root
+        ),
+
+        resume=(
+            args.resume
+        ),
+
+        max_new_iterations=(
+            args.max_new_iterations
+        ),
+    )
+
+
+    print(
+        f"status={result.status}"
+    )
+
+    print(
+        f"completed_iteration={result.completed_iteration}"
+    )
+
+    print(
+        f"best_iteration={result.best_iteration}"
+    )
+
+    print(
+        f"best_objective={result.best_objective}"
+    )
+
+    print(
+        f"final_objective={result.final_objective}"
+    )
+
+    print(
+        f"output_root={result.output_root}"
+    )
+
+    print(
+        f"checkpoint={result.checkpoint_path}"
+    )
+
+    print(
+        f"history={result.history_path}"
+    )
+
+    print(
+        f"winner={result.winner_path}"
+    )
+
+    print(
+        f"result={result.result_path}"
+    )
+
+
+    return 0
+
+
 def _baseline_run(
     args: argparse.Namespace,
 ) -> int:
@@ -1014,11 +1120,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     prep.add_argument(
         "--model",
-        default=None,
+        required=True,
+        choices=(
+            "sac-sma",
+            "snow17-sac-sma",
+        ),
         help=(
-            "Registered NextGenDA model adapter. "
-            "When omitted, the unique registered "
-            "adapter is used."
+            "Physical model configuration. "
+            "'sac-sma' runs SAC-SMA without Snow17; "
+            "'snow17-sac-sma' runs the coupled "
+            "SNOW17 -> NoahOWP -> SAC-SMA chain."
         ),
     )
 
@@ -1095,11 +1206,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepare.add_argument(
         "--model",
-        default=None,
+        required=True,
+        choices=(
+            "sac-sma",
+            "snow17-sac-sma",
+        ),
         help=(
-            "Registered NextGenDA model adapter. "
-            "When omitted, the unique registered "
-            "adapter is used."
+            "Physical model configuration. "
+            "'sac-sma' runs SAC-SMA without Snow17; "
+            "'snow17-sac-sma' runs the coupled "
+            "SNOW17 -> NoahOWP -> SAC-SMA chain."
         ),
     )
 
@@ -1123,6 +1239,103 @@ def build_parser() -> argparse.ArgumentParser:
 
 
     # --------------------------------------------------------------------------------------------
+    #
+    # calibrate
+    #
+    calibrate = sub.add_parser(
+        "calibrate",
+        help=(
+            "Run model calibration through the "
+            "model-neutral calibration executor."
+        ),
+    )
+
+    calibrate.add_argument(
+        "prepared_package",
+        help=(
+            "Path to a prepared NextGenDA package."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--observations",
+        required=True,
+        help=(
+            "Calibration observation CSV."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--cal-start",
+        required=True,
+        help=(
+            "Calibration evaluation start."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--cal-end-exclusive",
+        required=True,
+        help=(
+            "Exclusive calibration evaluation end."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--iterations",
+        type=int,
+        required=True,
+        help=(
+            "DDS candidate iteration count selected "
+            "explicitly by the user."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--perturbation",
+        type=float,
+        default=0.20,
+        help=(
+            "DDS perturbation fraction."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--expected-pairs",
+        type=int,
+        default=None,
+        help=(
+            "Optional exact required score-pair count."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--output-root",
+        default=None,
+        help=(
+            "Calibration output directory. Required "
+            "when resuming."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume an existing calibration checkpoint."
+        ),
+    )
+
+    calibrate.add_argument(
+        "--max-new-iterations",
+        type=int,
+        default=None,
+        help=(
+            "Optional number of new DDS iterations "
+            "to execute in this invocation."
+        ),
+    )
+
     # baseline-run
     # --------------------------------------------------------------------------------------------
 
@@ -1308,6 +1521,11 @@ def main() -> int:
 
     if args.command == "prepare":
         return _prepare(
+            args
+        )
+
+    if args.command == "calibrate":
+        return _calibrate(
             args
         )
 
