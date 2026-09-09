@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from heapq import heappop, heappush
-from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -446,29 +444,3 @@ class BaselineTRouteLocalizedEnSRF:
             pairwise,
             self._cutoff_distance_m,
         )
-
-    @staticmethod
-    def _dijkstra(
-        graph: Mapping[int, Sequence[tuple[int, float]]],
-        source: int,
-    ) -> Mapping[int, float]:
-        if source not in graph:
-            raise TRouteEnSRFAnalysisError(
-                f"Localization source segment is outside the domain: {source}."
-            )
-
-        distances: dict[int, float] = {source: 0.0}
-        queue: list[tuple[float, int]] = [(0.0, source)]
-
-        while queue:
-            distance, segment = heappop(queue)
-            if distance != distances[segment]:
-                continue
-
-            for neighbor, edge_distance in graph[segment]:
-                proposed = distance + edge_distance
-                if proposed < distances.get(neighbor, np.inf):
-                    distances[neighbor] = proposed
-                    heappush(queue, (proposed, neighbor))
-
-        return MappingProxyType(distances)
