@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
-import re
-import shutil
 import sqlite3
-import subprocess
 from typing import Any, Iterable
 
 from nextgenda.domain.forcing import inspect_forcing_variables
@@ -398,70 +395,6 @@ def inspect_hydrofabric(
 
     finally:
         connection.close()
-
-
-# -------------------------------------------------------------------------------------------------
-# NETCDF HEADER INSPECTION
-# -------------------------------------------------------------------------------------------------
-
-
-_VARIABLE_PATTERN = re.compile(
-    r"^\s*(?:byte|char|short|int|int64|float|double|string)\s+"
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*\(",
-)
-
-
-def inspect_netcdf_header(
-    path: Path,
-) -> tuple[
-    bool,
-    tuple[str, ...],
-]:
-    ncdump = shutil.which(
-        "ncdump"
-    )
-
-    if ncdump is None:
-        return (
-            False,
-            (),
-        )
-
-    process = subprocess.run(
-        [
-            ncdump,
-            "-h",
-            str(path),
-        ],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    if process.returncode != 0:
-        return (
-            False,
-            (),
-        )
-
-    variables: list[str] = []
-
-    for line in process.stdout.splitlines():
-        match = _VARIABLE_PATTERN.match(
-            line
-        )
-
-        if match:
-            name = match.group(1)
-
-            if name not in variables:
-                variables.append(name)
-
-    return (
-        True,
-        tuple(variables),
-    )
 
 
 # -------------------------------------------------------------------------------------------------
