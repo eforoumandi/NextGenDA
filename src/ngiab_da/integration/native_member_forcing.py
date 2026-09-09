@@ -1087,53 +1087,6 @@ class _NicasJointAR1Stream:
         return self._current
 
 
-    def inherit_ancestors(
-        self,
-        ancestors: Sequence[int],
-    ) -> None:
-        """Apply one PF ancestry map to the current forcing memory state."""
-
-        values = np.asarray(
-            ancestors,
-            dtype=np.int64,
-        )
-
-        if values.shape != (
-            self._member_count,
-        ):
-            raise NativeMemberForcingError(
-                "Forcing-lineage ancestry must contain one "
-                "ancestor index per ensemble member."
-            )
-
-        if (
-            np.any(
-                values < 0
-            )
-            or
-            np.any(
-                values
-                >=
-                self._member_count
-            )
-        ):
-            raise NativeMemberForcingError(
-                "Forcing-lineage ancestry contains an invalid "
-                "member index."
-            )
-
-        #
-        # Copy before assignment because ancestry may contain
-        # duplicated and reordered parents.
-        #
-        self._current = np.asarray(
-            self._current[
-                values,
-                :,
-                :
-            ],
-            dtype=np.float64,
-        ).copy()
 
 
 def _nicas_joint_ar1_stream(
