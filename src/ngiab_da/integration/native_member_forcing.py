@@ -1026,16 +1026,6 @@ class _NicasJointAR1Stream:
         )
 
 
-    @property
-    def state_nbytes(
-        self,
-    ) -> int:
-
-        return int(
-            self._current.nbytes
-        )
-
-
     def metadata(
         self,
     ) -> dict[str, Any]:
