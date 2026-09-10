@@ -278,6 +278,289 @@ def _ensure_ngiab_control_parent() -> Path:
     return parent
 
 
+def _ngiab_hydrofabric_required_paths() -> tuple[
+    Path,
+    Path,
+    Path,
+]:
+    """
+    Return the three pinned-NGIAB hydrofabric artifacts required to
+    avoid interactive hydrofabric acquisition/version prompts during
+    initial clean-home preparation.
+    """
+
+    root = (
+        Path(
+            "~/.ngiab/hydrofabric/v2.2"
+        )
+        .expanduser()
+    )
+
+    return (
+        root
+        / "conus_nextgen.gpkg",
+
+        root
+        / "conus_igraph_network.gpickle",
+
+        root
+        / "download_log.json",
+    )
+
+
+def _ensure_ngiab_hydrofabric_available(
+    *,
+    backend: Path,
+    log_root: Path,
+) -> bool:
+    """
+    Non-interactively provision the pinned NGIAB hydrofabric if absent.
+
+    The pinned NGIAB CLI calls ``Prompt.ask`` when its Community
+    Hydrofabric is missing. NextGenDA intentionally captures backend
+    stdout/stderr in preparation logs, so that prompt is not an
+    appropriate installation primitive for automated or clean-computer
+    execution.
+
+    When any required hydrofabric artifact is absent, invoke the pinned
+    backend's own ``download_and_update_hf()`` implementation before the
+    normal NGIAB CLI command.
+
+    Returns
+    -------
+    bool
+        True when a download was performed; False when all required
+        artifacts already existed.
+
+    Notes
+    -----
+    This function does not alter NGIAB source and does not create any
+    model, forcing, parameter, routing, or assimilation outputs.
+    """
+
+    required = (
+        _ngiab_hydrofabric_required_paths()
+    )
+
+    missing_before = [
+        path
+        for path in required
+        if not path.is_file()
+    ]
+
+    record_path = (
+        log_root
+        / "hydrofabric-bootstrap.json"
+    )
+
+
+    if not missing_before:
+
+        record_path.write_text(
+            json.dumps(
+                {
+                    "schema_version":
+                        1,
+
+                    "action":
+                        "already_present",
+
+                    "download_performed":
+                        False,
+
+                    "required_paths": [
+                        str(
+                            value
+                        )
+                        for value in required
+                    ],
+
+                    "missing_before":
+                        [],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        return False
+
+
+    bootstrap_code = (
+        "from data_sources.source_validation "
+        "import download_and_update_hf\n"
+        "download_and_update_hf()\n"
+    )
+
+    command = (
+        "uv",
+        "run",
+        "--project",
+        str(
+            backend
+        ),
+        "python",
+        "-c",
+        bootstrap_code,
+    )
+
+
+    command_path = (
+        log_root
+        / "hydrofabric-bootstrap-command.txt"
+    )
+
+    stdout_path = (
+        log_root
+        / "hydrofabric-bootstrap-stdout.txt"
+    )
+
+    stderr_path = (
+        log_root
+        / "hydrofabric-bootstrap-stderr.txt"
+    )
+
+
+    command_path.write_text(
+        shlex.join(
+            list(
+                command
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+    with (
+        stdout_path.open(
+            "w",
+            encoding="utf-8",
+        )
+        as stdout_stream,
+
+        stderr_path.open(
+            "w",
+            encoding="utf-8",
+        )
+        as stderr_stream
+    ):
+
+        process = subprocess.run(
+            list(
+                command
+            ),
+            check=False,
+            stdout=stdout_stream,
+            stderr=stderr_stream,
+            text=True,
+        )
+
+
+    missing_after = [
+        path
+        for path in required
+        if not path.is_file()
+    ]
+
+
+    record = {
+        "schema_version":
+            1,
+
+        "action":
+            (
+                "downloaded"
+                if (
+                    process.returncode == 0
+                    and not missing_after
+                )
+                else
+                "failed"
+            ),
+
+        "download_performed":
+            True,
+
+        "returncode":
+            process.returncode,
+
+        "command":
+            list(
+                command
+            ),
+
+        "stdout":
+            str(
+                stdout_path
+            ),
+
+        "stderr":
+            str(
+                stderr_path
+            ),
+
+        "required_paths": [
+            str(
+                value
+            )
+            for value in required
+        ],
+
+        "missing_before": [
+            str(
+                value
+            )
+            for value in missing_before
+        ],
+
+        "missing_after": [
+            str(
+                value
+            )
+            for value in missing_after
+        ],
+    }
+
+
+    record_path.write_text(
+        json.dumps(
+            record,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+    if process.returncode != 0:
+
+        raise PreparationError(
+            "Pinned NGIAB hydrofabric bootstrap failed. "
+            f"stdout={stdout_path}; stderr={stderr_path}"
+        )
+
+
+    if missing_after:
+
+        raise PreparationError(
+            "Pinned NGIAB hydrofabric bootstrap returned "
+            "successfully but required artifacts remain missing: "
+            + ", ".join(
+                str(
+                    value
+                )
+                for value in missing_after
+            )
+        )
+
+
+    return True
+
+
 def _default_name(
     *,
     selector_type: str,
@@ -1146,12 +1429,6 @@ def prepare_run_package(
     #
     _ensure_ngiab_control_parent()
 
-    before = (
-        _realization_paths(
-            output
-        )
-    )
-
     log_root = (
         root
         / "runs"
@@ -1170,6 +1447,24 @@ def prepare_run_package(
     log_root.mkdir(
         parents=True,
         exist_ok=False,
+    )
+
+    #
+    # A clean pinned-NGIAB HOME has no Community Hydrofabric.
+    # NGIAB normally requests it interactively, but this orchestration
+    # captures backend stdout/stderr in files. Provision missing
+    # hydrofabric artifacts first using NGIAB's own pinned downloader
+    # so preparation remains deterministic and non-interactive.
+    #
+    _ensure_ngiab_hydrofabric_available(
+        backend=backend,
+        log_root=log_root,
+    )
+
+    before = (
+        _realization_paths(
+            output
+        )
     )
 
     stdout_path = (

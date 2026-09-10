@@ -279,6 +279,50 @@ def test_real_preparation_creates_ngiab_control_parent_before_backend_launch(
     )
 
 
+    hydrofabric_guard = {
+        "called":
+            False,
+    }
+
+
+    def fake_hydrofabric_guard(
+        *,
+        backend,
+        log_root,
+    ):
+
+        assert (
+            backend.resolve()
+            ==
+            (
+                project_root
+                / "upstream"
+                / "NGIAB_data_preprocess"
+            ).resolve()
+        )
+
+        assert (
+            log_root.is_dir()
+        )
+
+        assert (
+            ngiab_parent.is_dir()
+        )
+
+        hydrofabric_guard[
+            "called"
+        ] = True
+
+        return False
+
+
+    monkeypatch.setattr(
+        preparation,
+        "_ensure_ngiab_hydrofabric_available",
+        fake_hydrofabric_guard,
+    )
+
+
     observed = {
         "subprocess_called":
             False,
@@ -380,6 +424,13 @@ def test_real_preparation_creates_ngiab_control_parent_before_backend_launch(
             True,
     }
 
+    assert (
+        hydrofabric_guard[
+            "called"
+        ]
+        is True
+    )
+
 
 def test_dry_run_does_not_create_ngiab_control_parent(
     tmp_path,
@@ -473,3 +524,367 @@ def test_dry_run_does_not_create_ngiab_control_parent(
     assert result.dry_run is True
 
     assert not ngiab_parent.exists()
+
+
+# CLEAN_HOME_NGIAB_HYDROFABRIC_BOOTSTRAP_REGRESSION
+def test_missing_ngiab_hydrofabric_is_downloaded_noninteractively(
+    tmp_path,
+    monkeypatch,
+):
+
+    import nextgenda.prep.prepare as preparation
+
+    home = (
+        tmp_path
+        / "fresh-home"
+    )
+
+    home.mkdir()
+
+    monkeypatch.setenv(
+        "HOME",
+        str(
+            home
+        ),
+    )
+
+    backend = (
+        tmp_path
+        / "backend"
+    )
+
+    backend.mkdir()
+
+    log_root = (
+        tmp_path
+        / "logs"
+    )
+
+    log_root.mkdir()
+
+
+    required = (
+        home
+        / ".ngiab"
+        / "hydrofabric"
+        / "v2.2"
+    )
+
+    expected_paths = (
+        required
+        / "conus_nextgen.gpkg",
+
+        required
+        / "conus_igraph_network.gpickle",
+
+        required
+        / "download_log.json",
+    )
+
+
+    calls = []
+
+
+    class FakeProcess:
+        returncode = 0
+
+
+    def fake_run(
+        args,
+        *,
+        check,
+        stdout,
+        stderr,
+        text,
+    ):
+
+        calls.append(
+            tuple(
+                args
+            )
+        )
+
+        assert (
+            args[
+                :4
+            ]
+            == [
+                "uv",
+                "run",
+                "--project",
+                str(
+                    backend
+                ),
+            ]
+        )
+
+        assert (
+            args[
+                4:6
+            ]
+            == [
+                "python",
+                "-c",
+            ]
+        )
+
+        assert (
+            "download_and_update_hf"
+            in args[
+                6
+            ]
+        )
+
+        assert check is False
+        assert text is True
+
+
+        required.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        expected_paths[
+            0
+        ].write_bytes(
+            b"fresh-gpkg"
+        )
+
+        expected_paths[
+            1
+        ].write_bytes(
+            b"fresh-graph"
+        )
+
+        expected_paths[
+            2
+        ].write_text(
+            '{"ETag":"test"}\n',
+            encoding="utf-8",
+        )
+
+
+        stdout.write(
+            "fresh hydrofabric downloaded\n"
+        )
+
+        stderr.write(
+            ""
+        )
+
+
+        return FakeProcess()
+
+
+    monkeypatch.setattr(
+        preparation.subprocess,
+        "run",
+        fake_run,
+    )
+
+
+    downloaded = (
+        preparation
+        ._ensure_ngiab_hydrofabric_available(
+            backend=backend,
+            log_root=log_root,
+        )
+    )
+
+
+    assert downloaded is True
+
+    assert len(
+        calls
+    ) == 1
+
+
+    for path in expected_paths:
+
+        assert (
+            path.is_file()
+        )
+
+
+    record = json.loads(
+        (
+            log_root
+            / "hydrofabric-bootstrap.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+    assert (
+        record[
+            "action"
+        ]
+        == "downloaded"
+    )
+
+    assert (
+        record[
+            "download_performed"
+        ]
+        is True
+    )
+
+    assert (
+        record[
+            "missing_after"
+        ]
+        == []
+    )
+
+    assert (
+        (
+            log_root
+            / "hydrofabric-bootstrap-command.txt"
+        ).is_file()
+    )
+
+    assert (
+        (
+            log_root
+            / "hydrofabric-bootstrap-stdout.txt"
+        ).read_text(
+            encoding="utf-8"
+        )
+        ==
+        "fresh hydrofabric downloaded\n"
+    )
+
+
+
+def test_existing_complete_ngiab_hydrofabric_is_not_redownloaded(
+    tmp_path,
+    monkeypatch,
+):
+
+    import nextgenda.prep.prepare as preparation
+
+    home = (
+        tmp_path
+        / "existing-home"
+    )
+
+    home.mkdir()
+
+    monkeypatch.setenv(
+        "HOME",
+        str(
+            home
+        ),
+    )
+
+    required = (
+        home
+        / ".ngiab"
+        / "hydrofabric"
+        / "v2.2"
+    )
+
+    required.mkdir(
+        parents=True,
+    )
+
+
+    (
+        required
+        / "conus_nextgen.gpkg"
+    ).write_bytes(
+        b"existing-gpkg"
+    )
+
+    (
+        required
+        / "conus_igraph_network.gpickle"
+    ).write_bytes(
+        b"existing-graph"
+    )
+
+    (
+        required
+        / "download_log.json"
+    ).write_text(
+        '{"ETag":"existing"}\n',
+        encoding="utf-8",
+    )
+
+
+    backend = (
+        tmp_path
+        / "backend"
+    )
+
+    backend.mkdir()
+
+    log_root = (
+        tmp_path
+        / "logs"
+    )
+
+    log_root.mkdir()
+
+
+    def forbidden_run(
+        *args,
+        **kwargs,
+    ):
+
+        raise AssertionError(
+            "Complete existing hydrofabric "
+            "must not be redownloaded."
+        )
+
+
+    monkeypatch.setattr(
+        preparation.subprocess,
+        "run",
+        forbidden_run,
+    )
+
+
+    downloaded = (
+        preparation
+        ._ensure_ngiab_hydrofabric_available(
+            backend=backend,
+            log_root=log_root,
+        )
+    )
+
+
+    assert downloaded is False
+
+
+    record = json.loads(
+        (
+            log_root
+            / "hydrofabric-bootstrap.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+    assert (
+        record[
+            "action"
+        ]
+        == "already_present"
+    )
+
+    assert (
+        record[
+            "download_performed"
+        ]
+        is False
+    )
+
+    assert (
+        record[
+            "missing_before"
+        ]
+        == []
+    )
