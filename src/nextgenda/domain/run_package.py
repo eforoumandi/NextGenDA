@@ -210,22 +210,6 @@ def discover_run_package_files(
 # -------------------------------------------------------------------------------------------------
 
 
-def _walk_values(
-    value: Any,
-):
-    if isinstance(value, dict):
-        for key, child in value.items():
-            yield str(key)
-            yield from _walk_values(child)
-
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_values(child)
-
-    elif isinstance(value, (str, int, float, bool)):
-        yield str(value)
-
-
 def realization_model(
     path: Path,
 ) -> str | None:
