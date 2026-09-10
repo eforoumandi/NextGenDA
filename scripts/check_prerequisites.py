@@ -446,6 +446,40 @@ def main() -> int:
         )
 
     title(
+        "CERTIFIED NATIVE HOST ARTIFACTS"
+    )
+
+    native_artifacts = process([
+        sys.executable,
+
+        str(
+            ROOT
+            / "scripts"
+            / "setup_native_artifacts.py"
+        ),
+
+        "--check-only",
+    ])
+
+    if native_artifacts.stdout.strip():
+
+        print(
+            native_artifacts.stdout.rstrip()
+        )
+
+    if native_artifacts.returncode != 0:
+
+        failures.append(
+            "native-host-artifacts"
+        )
+
+    else:
+
+        print(
+            "[OK] Certified native host artifacts."
+        )
+
+    title(
         "T-ROUTE"
     )
 

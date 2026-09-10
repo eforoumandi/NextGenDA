@@ -1,0 +1,37 @@
+{
+  "bundle_id": "nextgenda-native-host-linux-amd64-v1",
+  "files": {
+    "base/build/ngen": {
+      "sha256": "2188b616acecce11237b58364a23c694978f34f3e8d6edf4fe895e7a5c245265",
+      "size_bytes": 3844168
+    },
+    "routing/build/libngiab_da_routing_qlat_socket_hook.so": {
+      "sha256": "57bdec29cb188ca8648707d44e9fe6428204bec0649f8dfc04d99f003137808a",
+      "size_bytes": 181808
+    },
+    "sacsma/IMPLEMENTATION_CONTRACT.txt": {
+      "sha256": "42926f280df4561beb01f98ff8de768c510b9a6f297a6695b8f1ae2db3f85cd4",
+      "size_bytes": 1196
+    },
+    "sacsma/build/libngiab_da_sacsma_ensemble_socket_hook.so": {
+      "sha256": "d5b6f44972acbff203ea4df840491f0a448d0a9797c2fe57fc3e538f47ccea02",
+      "size_bytes": 203272
+    },
+    "sequential/build/libngiab_da_cfe_ensemble_socket_hook.so": {
+      "sha256": "0a3175c1cb187b6a7ae945517a42e73e40163497937c958ba5114b2099e58695",
+      "size_bytes": 189360
+    }
+  },
+  "install_layout": {
+    "base": "real-cfe-analysis-state-persistence-20260727T132653Z",
+    "routing": "routing-qlat-only-resume-20260806T211622Z",
+    "sacsma": "sacsma-in-memory-pf-core-20260811T000421Z",
+    "sequential": "sequential-ensemble-sidecar-generation-20260728T170204Z"
+  },
+  "platform": "linux/amd64",
+  "schema_version": 1,
+  "upstream_ngen": {
+    "commit": "fab1cd54084a067f9a6b8d77dfbbbbd5cdea4b8a",
+    "repository": "https://github.com/CIROH-UA/ngen.git"
+  }
+}

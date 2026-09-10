@@ -1,0 +1,12 @@
+{
+  "changed_files": [
+    "src/NGen.cpp",
+    "include/realizations/catchment/Bmi_Multi_Formulation.hpp",
+    "include/realizations/catchment/Bmi_Module_Formulation.hpp",
+    "CMakeLists.txt",
+    "include/ngiab_da_step_hook_api_v2.h"
+  ],
+  "hook_symbol": "ngiab_da_step_hook_v2",
+  "schema_version": 2,
+  "source_root": "/home/ehsanfrmd/NextGen/development/ngiab_da/ngiab-da/artifacts/real-cfe-analysis-state-persistence-20260727T132653Z/source"
+}

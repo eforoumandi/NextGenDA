@@ -8,9 +8,10 @@ The bootstrap:
 1. verifies that the host is Linux (including Windows through WSL2),
 2. installs the pinned NGIAB preparation repositories,
 3. verifies/pulls the immutable certified runtime image,
-4. installs the pinned t-route source,
-5. writes local runtime configuration,
-6. validates the complete prerequisite contract.
+4. installs the certified native host runtime artifacts,
+5. installs the pinned t-route source,
+6. writes local runtime configuration,
+7. validates the complete prerequisite contract.
 
 Native Windows/PowerShell is not a supported production host. Windows users
 must run NextGenDA inside WSL2 because the exact certified upstream source
@@ -202,6 +203,15 @@ def main() -> int:
         str(
             SCRIPTS
             / "setup_runtime.py"
+        ),
+    ])
+
+    run([
+        python,
+
+        str(
+            SCRIPTS
+            / "setup_native_artifacts.py"
         ),
     ])
 

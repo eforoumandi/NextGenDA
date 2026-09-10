@@ -1,0 +1,789 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9aee8b98..0d09d931 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -377,6 +377,7 @@ add_subdirectory("src/utilities/logging")
+ 
+ target_link_libraries(ngen
+     PUBLIC
++        ${CMAKE_DL_LIBS}  # NGIAB DA sequential hook uses dlopen
+         NGen::config_header
+         NGen::core
+         NGen::core_catchment
+diff --git a/include/realizations/catchment/Bmi_Module_Formulation.hpp b/include/realizations/catchment/Bmi_Module_Formulation.hpp
+index 259ac1ee..a222e727 100644
+--- a/include/realizations/catchment/Bmi_Module_Formulation.hpp
++++ b/include/realizations/catchment/Bmi_Module_Formulation.hpp
+@@ -250,6 +250,18 @@ namespace realization {
+         const std::vector<std::string> get_bmi_input_variables() const override;
+         const std::vector<std::string> get_bmi_output_variables() const override;
+ 
++        /**
++         * Backing BMI adapter handle for the in-process DA host.
++         *
++         * The host retains ownership and exposes only a C function table
++         * to plugins. Ownership remains shared with the formulation.
++         */
++        std::shared_ptr<models::bmi::Bmi_Adapter>
++        get_da_bmi_model() const {
++            return get_bmi_model();
++        }
++
++
+     protected:
+ 
+         /**
+diff --git a/include/realizations/catchment/Bmi_Multi_Formulation.hpp b/include/realizations/catchment/Bmi_Multi_Formulation.hpp
+index 5d07137e..145d30e4 100644
+--- a/include/realizations/catchment/Bmi_Multi_Formulation.hpp
++++ b/include/realizations/catchment/Bmi_Multi_Formulation.hpp
+@@ -517,6 +517,18 @@ namespace realization {
+             }
+         }
+ 
++        /**
++         * Read-only nested-module handles for an in-process DA host.
++         *
++         * The vector cannot be structurally modified through this API.
++         * Module state mutation remains governed by each module's BMI.
++         */
++        const std::vector<nested_module_ptr> &
++        get_da_nested_modules() const noexcept {
++            return modules;
++        }
++
++
+     protected:
+ 
+         /**
+diff --git a/src/NGen.cpp b/src/NGen.cpp
+index 8047d8ec..0caac3a4 100644
+--- a/src/NGen.cpp
++++ b/src/NGen.cpp
+@@ -1,3 +1,13 @@
++#include <cstddef>
++#include <cstdint>
++#include <cstdlib>
++#include <cstring>
++#include <dlfcn.h>
++#include <memory>
++#include <string>
++#include "ngiab_da_step_hook_api_v2.h"
++#include "realizations/catchment/Bmi_Multi_Formulation.hpp"
++#include "realizations/catchment/Bmi_Module_Formulation.hpp"
+ #include <iostream>
+ #include <fstream>
+ #include <string>
+@@ -135,6 +145,556 @@ void ngen::exec_info::runtime_summary(std::ostream& stream) noexcept
+ 
+ } // ngen::exec_info::runtime_summary
+ 
++
++// NGIAB_DA_DERIVED_SEQUENTIAL_HOOK_V2
++namespace {
++
++struct NgiabDaHostContext {
++    realization::Formulation_Manager *manager;
++};
++
++bool ngiab_da_environment_true(const char *name) noexcept {
++    const char *value = std::getenv(name);
++    if (value == nullptr) {
++        return false;
++    }
++
++    return std::strcmp(value, "1") == 0
++        || std::strcmp(value, "true") == 0
++        || std::strcmp(value, "TRUE") == 0
++        || std::strcmp(value, "yes") == 0
++        || std::strcmp(value, "YES") == 0;
++}
++
++int ngiab_da_copy_string(
++    const std::string &value,
++    char *destination,
++    std::size_t capacity,
++    std::size_t *required_size
++) noexcept {
++    const std::size_t required = value.size() + 1;
++    if (required_size != nullptr) {
++        *required_size = required;
++    }
++    if (destination == nullptr || capacity < required) {
++        return NGIAB_DA_HOST_BUFFER_TOO_SMALL;
++    }
++
++    std::memcpy(destination, value.c_str(), required);
++    return NGIAB_DA_HOST_OK;
++}
++
++using NgiabDaCatchmentEntry = std::pair<
++    const std::string,
++    std::shared_ptr<realization::Catchment_Formulation>
++>;
++
++const NgiabDaCatchmentEntry *ngiab_da_catchment_at(
++    NgiabDaHostContext *context,
++    std::size_t catchment_index
++) noexcept {
++    if (context == nullptr || context->manager == nullptr) {
++        return nullptr;
++    }
++
++    std::size_t current = 0;
++    for (
++        auto iterator = context->manager->begin();
++        iterator != context->manager->end();
++        ++iterator, ++current
++    ) {
++        if (current == catchment_index) {
++            return std::addressof(*iterator);
++        }
++    }
++    return nullptr;
++}
++
++std::shared_ptr<realization::Bmi_Formulation>
++ngiab_da_nested_formulation_at(
++    NgiabDaHostContext *context,
++    std::size_t catchment_index,
++    std::size_t module_index
++) noexcept {
++    const auto *entry = ngiab_da_catchment_at(
++        context,
++        catchment_index
++    );
++    if (entry == nullptr || entry->second == nullptr) {
++        return {};
++    }
++
++    auto multi = std::dynamic_pointer_cast<
++        realization::Bmi_Multi_Formulation
++    >(entry->second);
++    if (multi != nullptr) {
++        const auto &modules = multi->get_da_nested_modules();
++        if (module_index >= modules.size()) {
++            return {};
++        }
++        return modules[module_index];
++    }
++
++    auto direct = std::dynamic_pointer_cast<
++        realization::Bmi_Formulation
++    >(entry->second);
++    if (direct != nullptr && module_index == 0) {
++        return direct;
++    }
++
++    return {};
++}
++
++std::shared_ptr<realization::Bmi_Module_Formulation>
++ngiab_da_bmi_module_at(
++    NgiabDaHostContext *context,
++    std::size_t catchment_index,
++    std::size_t module_index
++) noexcept {
++    return std::dynamic_pointer_cast<
++        realization::Bmi_Module_Formulation
++    >(
++        ngiab_da_nested_formulation_at(
++            context,
++            catchment_index,
++            module_index
++        )
++    );
++}
++
++std::size_t ngiab_da_host_catchment_count(
++    void *opaque_context
++) noexcept {
++    auto *context = static_cast<NgiabDaHostContext *>(
++        opaque_context
++    );
++    if (context == nullptr || context->manager == nullptr) {
++        return 0;
++    }
++    return static_cast<std::size_t>(
++        context->manager->get_size()
++    );
++}
++
++int ngiab_da_host_copy_catchment_id(
++    void *opaque_context,
++    std::size_t catchment_index,
++    char *destination,
++    std::size_t capacity,
++    std::size_t *required_size
++) noexcept {
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        const auto *entry = ngiab_da_catchment_at(
++            context,
++            catchment_index
++        );
++        if (entry == nullptr) {
++            return NGIAB_DA_HOST_NOT_FOUND;
++        }
++        return ngiab_da_copy_string(
++            entry->first,
++            destination,
++            capacity,
++            required_size
++        );
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_EXCEPTION;
++    }
++}
++
++std::size_t ngiab_da_host_module_count(
++    void *opaque_context,
++    std::size_t catchment_index
++) noexcept {
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        const auto *entry = ngiab_da_catchment_at(
++            context,
++            catchment_index
++        );
++        if (entry == nullptr || entry->second == nullptr) {
++            return 0;
++        }
++
++        auto multi = std::dynamic_pointer_cast<
++            realization::Bmi_Multi_Formulation
++        >(entry->second);
++        if (multi != nullptr) {
++            return multi->get_da_nested_modules().size();
++        }
++
++        return std::dynamic_pointer_cast<
++            realization::Bmi_Formulation
++        >(entry->second) != nullptr ? 1u : 0u;
++    }
++    catch (...) {
++        return 0;
++    }
++}
++
++int ngiab_da_host_copy_module_type(
++    void *opaque_context,
++    std::size_t catchment_index,
++    std::size_t module_index,
++    char *destination,
++    std::size_t capacity,
++    std::size_t *required_size
++) noexcept {
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        auto formulation = ngiab_da_nested_formulation_at(
++            context,
++            catchment_index,
++            module_index
++        );
++        if (formulation == nullptr) {
++            return NGIAB_DA_HOST_NOT_FOUND;
++        }
++        return ngiab_da_copy_string(
++            formulation->get_formulation_type(),
++            destination,
++            capacity,
++            required_size
++        );
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_EXCEPTION;
++    }
++}
++
++int ngiab_da_host_copy_component_name(
++    void *opaque_context,
++    std::size_t catchment_index,
++    std::size_t module_index,
++    char *destination,
++    std::size_t capacity,
++    std::size_t *required_size
++) noexcept {
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        auto module = ngiab_da_bmi_module_at(
++            context,
++            catchment_index,
++            module_index
++        );
++        if (module == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        auto adapter = module->get_da_bmi_model();
++        if (adapter == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        return ngiab_da_copy_string(
++            adapter->GetComponentName(),
++            destination,
++            capacity,
++            required_size
++        );
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_EXCEPTION;
++    }
++}
++
++int ngiab_da_host_get_variable_info(
++    void *opaque_context,
++    std::size_t catchment_index,
++    std::size_t module_index,
++    const char *variable_name,
++    char *type_destination,
++    std::size_t type_capacity,
++    std::size_t *type_required_size,
++    std::size_t *nbytes
++) noexcept {
++    if (variable_name == nullptr || nbytes == nullptr) {
++        return NGIAB_DA_HOST_INVALID_ARGUMENT;
++    }
++
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        auto module = ngiab_da_bmi_module_at(
++            context,
++            catchment_index,
++            module_index
++        );
++        if (module == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        auto adapter = module->get_da_bmi_model();
++        if (adapter == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++
++        const std::string name(variable_name);
++        const std::string type = adapter->GetVarType(name);
++        const int byte_count = adapter->GetVarNbytes(name);
++        if (byte_count < 0) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        *nbytes = static_cast<std::size_t>(byte_count);
++        return ngiab_da_copy_string(
++            type,
++            type_destination,
++            type_capacity,
++            type_required_size
++        );
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_UNSUPPORTED;
++    }
++}
++
++int ngiab_da_host_get_value(
++    void *opaque_context,
++    std::size_t catchment_index,
++    std::size_t module_index,
++    const char *variable_name,
++    void *destination,
++    std::size_t destination_size
++) noexcept {
++    if (variable_name == nullptr || destination == nullptr) {
++        return NGIAB_DA_HOST_INVALID_ARGUMENT;
++    }
++
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        auto module = ngiab_da_bmi_module_at(
++            context,
++            catchment_index,
++            module_index
++        );
++        if (module == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        auto adapter = module->get_da_bmi_model();
++        if (adapter == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++
++        const std::string name(variable_name);
++        const int byte_count = adapter->GetVarNbytes(name);
++        if (
++            byte_count < 0
++            || destination_size
++                != static_cast<std::size_t>(byte_count)
++        ) {
++            return NGIAB_DA_HOST_INVALID_ARGUMENT;
++        }
++
++        adapter->GetValue(name, destination);
++        return NGIAB_DA_HOST_OK;
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_UNSUPPORTED;
++    }
++}
++
++int ngiab_da_host_set_value(
++    void *opaque_context,
++    std::size_t catchment_index,
++    std::size_t module_index,
++    const char *variable_name,
++    const void *source,
++    std::size_t source_size
++) noexcept {
++    if (variable_name == nullptr || source == nullptr) {
++        return NGIAB_DA_HOST_INVALID_ARGUMENT;
++    }
++
++    try {
++        auto *context = static_cast<NgiabDaHostContext *>(
++            opaque_context
++        );
++        auto module = ngiab_da_bmi_module_at(
++            context,
++            catchment_index,
++            module_index
++        );
++        if (module == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++        auto adapter = module->get_da_bmi_model();
++        if (adapter == nullptr) {
++            return NGIAB_DA_HOST_UNSUPPORTED;
++        }
++
++        const std::string name(variable_name);
++        const int byte_count = adapter->GetVarNbytes(name);
++        if (
++            byte_count < 0
++            || source_size != static_cast<std::size_t>(byte_count)
++        ) {
++            return NGIAB_DA_HOST_INVALID_ARGUMENT;
++        }
++
++        adapter->SetValue(
++            name,
++            const_cast<void *>(source)
++        );
++        return NGIAB_DA_HOST_OK;
++    }
++    catch (...) {
++        return NGIAB_DA_HOST_UNSUPPORTED;
++    }
++}
++
++NgiabDaHostApiV2 ngiab_da_make_host_api(
++    NgiabDaHostContext *context
++) noexcept {
++    NgiabDaHostApiV2 api{};
++    api.abi_version = NGIAB_DA_HOST_API_ABI_VERSION;
++    api.struct_size = sizeof(NgiabDaHostApiV2);
++    api.context = context;
++    api.catchment_count = &ngiab_da_host_catchment_count;
++    api.copy_catchment_id = &ngiab_da_host_copy_catchment_id;
++    api.module_count = &ngiab_da_host_module_count;
++    api.copy_module_type = &ngiab_da_host_copy_module_type;
++    api.copy_component_name = &ngiab_da_host_copy_component_name;
++    api.get_variable_info = &ngiab_da_host_get_variable_info;
++    api.get_value = &ngiab_da_host_get_value;
++    api.set_value = &ngiab_da_host_set_value;
++    return api;
++}
++
++class NgiabDaSequentialHook {
++public:
++    NgiabDaSequentialHook() noexcept
++        : handle_(nullptr),
++          function_(nullptr),
++          enabled_(false),
++          routing_requested_(
++              ngiab_da_environment_true(
++                  "NGIAB_DA_HOOK_OWNS_ROUTING"
++              )
++          ) {
++        const char *library_path = std::getenv(
++            "NGIAB_DA_STEP_HOOK_LIBRARY"
++        );
++        if (library_path == nullptr || library_path[0] == '\0') {
++            return;
++        }
++
++        handle_ = dlopen(library_path, RTLD_NOW | RTLD_LOCAL);
++        if (handle_ == nullptr) {
++            const char *message = dlerror();
++            std::cerr
++                << "NGIAB DA hook could not be loaded; "
++                << "continuing with normal NGen behavior: "
++                << (message == nullptr ? "unknown dlopen error" : message)
++                << std::endl;
++            return;
++        }
++
++        dlerror();
++        void *symbol = dlsym(handle_, "ngiab_da_step_hook_v2");
++        const char *message = dlerror();
++        if (message != nullptr || symbol == nullptr) {
++            std::cerr
++                << "NGIAB DA hook symbol ngiab_da_step_hook_v2 "
++                << "was not found; continuing with normal NGen behavior: "
++                << (message == nullptr ? "unknown dlsym error" : message)
++                << std::endl;
++            dlclose(handle_);
++            handle_ = nullptr;
++            return;
++        }
++
++        function_ = reinterpret_cast<
++            NgiabDaStepHookFunctionV2
++        >(symbol);
++        enabled_ = true;
++        std::cout
++            << "NGIAB DA sequential hook v2 enabled"
++            << (routing_requested_ ? " with routing ownership" : "")
++            << std::endl;
++    }
++
++    ~NgiabDaSequentialHook() noexcept {
++        disable();
++    }
++
++    NgiabDaSequentialHook(const NgiabDaSequentialHook &) = delete;
++    NgiabDaSequentialHook &operator=(
++        const NgiabDaSequentialHook &
++    ) = delete;
++
++    bool enabled() const noexcept {
++        return enabled_;
++    }
++
++    bool owns_routing() const noexcept {
++        return enabled_ && routing_requested_;
++    }
++
++    void invoke(
++        realization::Formulation_Manager *formulation_manager,
++        std::int64_t timestep,
++        std::int64_t analysis_epoch_seconds
++    ) noexcept {
++        if (
++            !enabled_
++            || function_ == nullptr
++            || formulation_manager == nullptr
++        ) {
++            return;
++        }
++
++        NgiabDaHostContext context{formulation_manager};
++        NgiabDaHostApiV2 api = ngiab_da_make_host_api(
++            &context
++        );
++        const int status = function_(
++            &api,
++            timestep,
++            analysis_epoch_seconds
++        );
++        if (status == 0) {
++            return;
++        }
++
++        std::cerr
++            << "NGIAB DA sequential hook v2 returned status "
++            << status
++            << " at timestep "
++            << timestep
++            << "; disabling the hook and reverting to normal "
++            << "NGen fail-open behavior."
++            << std::endl;
++        disable();
++    }
++
++private:
++    void disable() noexcept {
++        enabled_ = false;
++        function_ = nullptr;
++        if (handle_ != nullptr) {
++            dlclose(handle_);
++            handle_ = nullptr;
++        }
++    }
++
++    void *handle_;
++    NgiabDaStepHookFunctionV2 function_;
++    bool enabled_;
++    bool routing_requested_;
++};
++
++}  // namespace
++
+ int main(int argc, char *argv[]) {
+ 
+     if (argc > 1 && std::string{argv[1]} == "--info") {
+@@ -505,6 +1065,7 @@ int main(int argc, char *argv[]) {
+     std::chrono::duration<double> time_elapsed_init = time_done_init - time_start;
+ 
+     //Now loop some time, iterate catchments, do stuff for total number of output times
++    NgiabDaSequentialHook ngiab_da_sequential_hook;
+     auto num_times = manager->Simulation_Time_Object->get_total_output_times();
+     for( int count = 0; count < num_times; count++) 
+     {
+@@ -550,6 +1111,12 @@ int main(int argc, char *argv[]) {
+         } //done layers
+       } while( layer_min_next_time < next_time );  // rerun the loop until the last layer would pass the master next time
+ 
++
++      ngiab_da_sequential_hook.invoke(
++          manager.get(),
++          static_cast<std::int64_t>(count),
++          static_cast<std::int64_t>(next_time)
++      );
+       if (count + 1 < num_times)
+       {
+         manager->Simulation_Time_Object->advance_timestep();
+@@ -591,7 +1158,27 @@ int main(int argc, char *argv[]) {
+ 
+           int delta_time = manager->Simulation_Time_Object->get_output_interval_seconds();
+           
+-          router->route(number_of_timesteps, delta_time); 
++          if (ngiab_da_sequential_hook.owns_routing()) {
++          
++              std::cout
++          
++                  << "NGIAB DA hook owns routing; "
++          
++                  << "skipping end-of-run router call."
++          
++                  << std::endl;
++          
++          } else {
++          
++              router->route(
++          
++                  number_of_timesteps,
++          
++                  delta_time
++          
++              );
++          
++          }
+         }
+ #endif
+ 
+diff --git a/include/ngiab_da_step_hook_api_v2.h b/include/ngiab_da_step_hook_api_v2.h
+new file mode 100644
+index 00000000..4e738f10
+--- /dev/null
++++ b/include/ngiab_da_step_hook_api_v2.h
+@@ -0,0 +1,100 @@
++#ifndef NGIAB_DA_STEP_HOOK_API_V2_H
++#define NGIAB_DA_STEP_HOOK_API_V2_H
++
++#include <stddef.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define NGIAB_DA_HOST_API_ABI_VERSION 2u
++
++enum NgiabDaHostStatus {
++    NGIAB_DA_HOST_OK = 0,
++    NGIAB_DA_HOST_NOT_FOUND = 1,
++    NGIAB_DA_HOST_BUFFER_TOO_SMALL = 2,
++    NGIAB_DA_HOST_INVALID_ARGUMENT = 3,
++    NGIAB_DA_HOST_UNSUPPORTED = 4,
++    NGIAB_DA_HOST_EXCEPTION = 5
++};
++
++typedef struct NgiabDaHostApiV2 {
++    uint32_t abi_version;
++    uint32_t struct_size;
++    void *context;
++
++    size_t (*catchment_count)(void *context);
++
++    int (*copy_catchment_id)(
++        void *context,
++        size_t catchment_index,
++        char *destination,
++        size_t capacity,
++        size_t *required_size
++    );
++
++    size_t (*module_count)(
++        void *context,
++        size_t catchment_index
++    );
++
++    int (*copy_module_type)(
++        void *context,
++        size_t catchment_index,
++        size_t module_index,
++        char *destination,
++        size_t capacity,
++        size_t *required_size
++    );
++
++    int (*copy_component_name)(
++        void *context,
++        size_t catchment_index,
++        size_t module_index,
++        char *destination,
++        size_t capacity,
++        size_t *required_size
++    );
++
++    int (*get_variable_info)(
++        void *context,
++        size_t catchment_index,
++        size_t module_index,
++        const char *variable_name,
++        char *type_destination,
++        size_t type_capacity,
++        size_t *type_required_size,
++        size_t *nbytes
++    );
++
++    int (*get_value)(
++        void *context,
++        size_t catchment_index,
++        size_t module_index,
++        const char *variable_name,
++        void *destination,
++        size_t destination_size
++    );
++
++    int (*set_value)(
++        void *context,
++        size_t catchment_index,
++        size_t module_index,
++        const char *variable_name,
++        const void *source,
++        size_t source_size
++    );
++} NgiabDaHostApiV2;
++
++typedef int (*NgiabDaStepHookFunctionV2)(
++    const NgiabDaHostApiV2 *host_api,
++    int64_t timestep,
++    int64_t analysis_epoch_seconds
++);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif

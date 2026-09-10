@@ -1,0 +1,61 @@
+SAC-SMA in-memory PF production-core contract
+
+Information path:
+
+    raw USGS
+        |
+        v
+    routing EnSRF only
+        |
+        v
+    analyzed routing state
+        |
+        v
+    RoutingPosteriorQlat
+        |
+        v
+    reduced-rank incremental PF weighting
+        |
+        v
+    ESS / deterministic ancestry
+        |
+        v
+    six-state SAC-SMA ancestry writeback
+
+SAC-SMA state vector:
+
+    uztwc
+    uzfwc
+    lztwc
+    lzfsc
+    lzfpc
+    adimc
+
+Ancestry semantics:
+
+    X_target(j,c)^a = X_source(ancestor[j],c)^f
+
+for every catchment c.
+
+Explicit exclusions:
+
+    No raw USGS in SAC-SMA PF request.
+    No direct streamflow/discharge observation in SAC-SMA PF request.
+    No Snow17 state copying.
+    No routing q0 copying.
+    No routing EnSRF state copying.
+    No CFE replay event.
+    No generation relaunch for SAC-SMA resampling.
+    No additive SAC-SMA state increment.
+    No SAC-SMA state rejuvenation.
+
+Feature gate:
+
+    NGIAB_DA_RUNOFF_PF_MODEL=sacsma
+
+Existing default:
+
+    NGIAB_DA_RUNOFF_PF_MODEL unset -> cfe
+
+The public transparent-run capability is intentionally NOT promoted by
+this patch.  Live forced-resampling acceptance is required first.

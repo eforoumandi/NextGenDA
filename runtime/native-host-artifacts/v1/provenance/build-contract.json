@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "https://github.com/CIROH-UA/ngen.git",
+  "upstream_commit": "fab1cd54084a067f9a6b8d77dfbbbbd5cdea4b8a",
+  "ngen_version": "0.3.0",
+  "build_type": "Release",
+  "compiler_family": "GNU",
+  "compiler_version": "11.5.0",
+  "NGEN_WITH_BMI_C": true,
+  "NGEN_WITH_BMI_FORTRAN": true,
+  "NGEN_WITH_MPI": false,
+  "NGEN_WITH_NETCDF": true,
+  "NGEN_WITH_SQLITE": true,
+  "NGEN_WITH_UDUNITS": true,
+  "certified_ngen_sha256": "2188b616acecce11237b58364a23c694978f34f3e8d6edf4fe895e7a5c245265",
+  "platform": "linux/amd64"
+}

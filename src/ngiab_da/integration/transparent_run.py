@@ -707,7 +707,10 @@ def resolve_derived_native_artifacts(
         or os.environ.get("NGIAB_DA_ARTIFACT_PARENT")
         or (
             Path.home()
-            / "NextGen/development/ngiab_da/ngiab-da/artifacts"
+            / ".local"
+            / "share"
+            / "nextgenda"
+            / "artifacts"
         )
     ).expanduser().resolve()
 
