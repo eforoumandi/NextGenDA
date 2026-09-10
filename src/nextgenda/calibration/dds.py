@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import (
-    asdict,
     dataclass,
 )
 import math
@@ -1237,15 +1236,3 @@ def proposal_payload(
                 proposal.candidate_vector
             ),
     }
-
-
-def state_payload(
-    state: DDSState,
-) -> dict[
-    str,
-    Any,
-]:
-
-    return asdict(
-        state
-    )
