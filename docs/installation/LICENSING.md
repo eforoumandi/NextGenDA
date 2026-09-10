@@ -19,5 +19,6 @@ See:
 - `THIRD_PARTY_LICENSES/`
 - `runtime/runtime-lock.json`
 
-The NextGenDA Apache-2.0 license does not change or replace the licenses
-of SAC-SMA, ngen/NextGen, or t-route.
+The NextGenDA Apache-2.0 license does not change or replace the licenses or
+government notices associated with SAC-SMA, Snow17, NoahOWP-Modular,
+ngen/NextGen, or t-route.

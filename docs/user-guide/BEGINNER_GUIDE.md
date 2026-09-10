@@ -1,8 +1,8 @@
 # NextGenDA Beginner Guide
 
 This guide describes the public NextGenDA workflow for installing,
-configuring, running, monitoring, and reproducing SAC-SMA data-assimilation
-experiments.
+configuring, running, monitoring, and reproducing data-assimilation experiments
+for the certified `sac-sma` and `snow17-sac-sma` model configurations.
 
 ## 1. Supported environment
 
@@ -16,9 +16,9 @@ The initial certified release workflow targets:
 - the Python environment defined by `environment.yml`
 - internet access during initial bootstrap
 
-NextGenDA uses an immutable certified runtime container and an exact pinned
-t-route source revision. Users should not rebuild t-route, ngen, or SAC-SMA
-for the certified beginner workflow.
+NextGenDA uses immutable certified runtime images and an exact pinned t-route
+source revision. Users should not rebuild t-route, ngen, SAC-SMA, Snow17, or
+NoahOWP for the certified beginner workflow.
 
 ### Windows requirement
 
@@ -50,7 +50,7 @@ python scripts/bootstrap_nextgenda.py
 This is the standard one-command dependency bootstrap. It automatically:
 
 - checks out the exact pinned NGIAB preparation repositories;
-- verifies and pulls the immutable certified runtime container;
+- verifies and pulls the immutable certified runtime images required by the supported model configurations;
 - installs the exact pinned t-route source revision;
 - writes optional Bash and PowerShell runtime configuration files; and
 - runs the complete prerequisite checker.
@@ -90,7 +90,53 @@ two periods may not overlap or touch.
 
 A final confirmation is required before execution.
 
-## 7. Public uncertainty defaults
+## 7. Choosing the model configuration
+
+The interactive workflow asks which rainfall-runoff model configuration to use.
+
+The current certified public choices are:
+
+| Model | Physical chain | Calibration | Assimilation |
+|---|---|---|---|
+| `sac-sma` | SAC-SMA | supported | supported |
+| `snow17-sac-sma` | Snow17 -> NoahOWP -> SAC-SMA | supported | supported |
+
+For `snow17-sac-sma`, SAC-SMA is still the runoff-generation component that is
+directly updated by the runoff particle filter. Snow17 and NoahOWP do **not**
+receive direct streamflow-observation increments.
+
+Instead, whenever complete SIR selects a particle ancestor, the complete
+Snow17 and NoahOWP particle state is transferred using the same ancestry as
+SAC-SMA. This keeps the selected particle physically coherent across the
+coupled model chain and avoids creating a hybrid particle composed of states
+from different ancestors.
+
+The coupled chain used by the certified workflow is:
+
+```text
+meteorological forcing
+        |
+        v
+Snow17
+        |
+        | rain + melt
+        v
+NoahOWP
+        |
+        | evapotranspiration / PET coupling
+        v
+SAC-SMA
+        |
+        v
+lateral inflow / runoff
+```
+
+The operational runoff PF algorithm remains the certified SAC-SMA Block-SIR
+algorithm. Selecting `snow17-sac-sma` changes the physical model chain and
+particle-state ancestry contract; it does not replace the runoff PF with a
+different algorithm.
+
+## 8. Public uncertainty defaults
 
 ### Ensemble and meteorological forcing
 
@@ -127,7 +173,7 @@ For every informed runoff block, complete SIR ancestry selection is performed
 during the analysis cycle. Effective sample size (ESS) is retained as a
 diagnostic rather than a switch that decides whether assimilation occurs.
 
-## 8. Single-gauge assimilation
+## 9. Single-gauge assimilation
 
 To perform single-gauge assimilation:
 
@@ -139,7 +185,7 @@ To perform single-gauge assimilation:
 
 Only the downstream gauge is configured for assimilation.
 
-## 9. Multi-gauge assimilation
+## 10. Multi-gauge assimilation
 
 To perform multi-gauge assimilation:
 
@@ -153,9 +199,9 @@ To perform multi-gauge assimilation:
 The configured runoff-block partition is static. Missing observations at a
 particular cycle do not dynamically repartition the basin.
 
-## 10. Scientific DA architecture
+## 11. Scientific DA architecture
 
-The certified SAC-SMA workflow follows:
+For `sac-sma`, the certified workflow follows:
 
 ```text
 meteorological forcing ensemble
@@ -186,6 +232,41 @@ localized complete SAC-SMA Block-SIR ancestry
         +--> forcing AR(1) lineage
 ```
 
+For `snow17-sac-sma`, the observation-processing and runoff-PF pathway is the
+same, but the particle ancestry is extended across the coupled physical chain:
+
+```text
+meteorological forcing ensemble
+        |
+        v
+Snow17 -> NoahOWP -> SAC-SMA
+        |
+        v
+member runoff / lateral inflow
+        |
+        v
+t-route ensemble routing
+        |
+        v
+localized serial routing EnSRF
+        |
+        v
+routing-conditioned qlat density ratio
+        |
+        v
+localized complete Block-SIR ancestry
+        |
+        +--> SAC-SMA states
+        +--> complete Snow17 particle state
+        +--> complete NoahOWP water + energy particle state
+        +--> LIS/GMAO SAC-SMA perturbation memory
+        +--> forcing AR(1) lineage
+```
+
+Only SAC-SMA receives the direct runoff-generation PF state update. Snow17 and
+NoahOWP follow the selected complete particle ancestry so their hydrologic
+memory remains consistent with the selected SAC-SMA ancestor.
+
 Raw USGS discharge observations enter the routing EnSRF only.
 
 The SAC-SMA Block-SIR update does not directly assimilate raw USGS
@@ -203,7 +284,7 @@ Runoff-generation PF localization is upstream-only.
 For a multi-gauge configuration, each runoff block uses only causally valid
 active gauges for that block.
 
-## 11. Calibration, warm-up, and assimilation windows
+## 12. Calibration, warm-up, and assimilation windows
 
 The interactive workflow asks for:
 
@@ -222,7 +303,7 @@ assimilation start.
 
 The public default warm-up duration is 30 days.
 
-## 12. Preparing without immediately running
+## 13. Preparing without immediately running
 
 The interactive workflow can prepare and fully configure a package without
 immediately launching the complete production experiment.
@@ -245,7 +326,7 @@ nextgenda assimilation-run PREPARED_PACKAGE
 Replace `PREPARED_PACKAGE` with the exact package path printed by the
 interactive workflow.
 
-## 13. Run workspaces and outputs
+## 14. Run workspaces and outputs
 
 Each production run receives its own durable workspace.
 
@@ -274,7 +355,7 @@ The exact files depend on execution phase and enabled capability.
 
 Do not overwrite an existing scientific run workspace.
 
-## 14. Monitoring
+## 15. Monitoring
 
 The primary durable run-state file is:
 
@@ -296,7 +377,7 @@ Do not estimate model-cycle completion directly from the total line count in
 `barrier_events.jsonl`. Multiple protocol events can be emitted for each
 member and cycle.
 
-## 15. Multi-gauge diagnostics
+## 16. Multi-gauge diagnostics
 
 Useful multi-gauge diagnostics include:
 
@@ -315,12 +396,12 @@ These diagnostics are important for demonstrating that raw USGS observations
 remain restricted to routing EnSRF and that runoff PF updates follow the
 configured causal support.
 
-## 16. Reproducibility
+## 17. Reproducibility
 
 For a scientific experiment, preserve at least:
 
 - NextGenDA source revision;
-- certified runtime image identity/digest;
+- certified runtime image identities/digests for the selected model configuration;
 - exact t-route revision;
 - model and run periods;
 - warm-up;
@@ -332,11 +413,11 @@ For a scientific experiment, preserve at least:
 - runtime status/provenance manifests;
 - random-seed policy.
 
-Do not manually substitute a different SAC-SMA runtime library, t-route
-checkout, or runtime container in an experiment intended to reproduce a
-certified result.
+Do not manually substitute different SAC-SMA, Snow17, or NoahOWP runtime
+libraries, a different t-route checkout, or different runtime images in an
+experiment intended to reproduce a certified result.
 
-## 17. Updating NextGenDA
+## 18. Updating NextGenDA
 
 For a normal source update:
 
@@ -351,7 +432,7 @@ If a release changes its pinned runtime or t-route revision, use the versions
 specified by that release rather than replacing them with arbitrary local
 builds.
 
-## 18. Troubleshooting
+## 19. Troubleshooting
 
 ### `nextgenda` command not found
 

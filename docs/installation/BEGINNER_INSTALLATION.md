@@ -1,7 +1,8 @@
 # NextGenDA Beginner Installation
 
 This guide starts from a clean computer and ends with a verified NextGenDA
-installation ready to launch the public interactive assimilation workflow.
+installation ready to launch the public interactive assimilation workflow for
+the certified `sac-sma` and `snow17-sac-sma` model configurations.
 
 ## 1. Certified host contract
 
@@ -264,14 +265,20 @@ The bootstrap:
 
 1. rejects unsupported hosts before external setup;
 2. checks out the exact pinned NGIAB preparation repositories;
-3. verifies and pulls the immutable certified runtime container;
+3. verifies and pulls the immutable certified runtime images required by the supported model configurations;
 4. installs the exact pinned t-route source revision;
 5. writes the local runtime configuration; and
 6. runs the complete prerequisite checker.
 
-No manual t-route compilation, ngen build, SAC-SMA build, source-path editing,
-or runtime-environment `source` command is required for the standard certified
-workflow.
+No manual t-route compilation, ngen build, SAC-SMA build, Snow17 build,
+NoahOWP build, source-path editing, or runtime-environment `source` command is
+required for the standard certified workflow.
+
+The bootstrap installs both certified NextGenDA runtime images. The normal
+`sac-sma` workflow uses the SAC-SMA state-access runtime. The coupled
+`snow17-sac-sma` workflow additionally uses the certified coupled member runtime
+that exposes the complete Snow17 and NoahOWP particle state required for coherent
+SIR ancestry propagation.
 
 ## 10. Verify the completed installation
 

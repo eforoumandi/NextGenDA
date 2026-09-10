@@ -1,7 +1,7 @@
 # Running NextGenDA
 
 This guide summarizes the current public execution surface for the certified
-SAC-SMA NextGenDA workflow.
+`sac-sma` and `snow17-sac-sma` NextGenDA workflows.
 
 For a clean-computer installation, see
 [`../installation/BEGINNER_INSTALLATION.md`](../installation/BEGINNER_INSTALLATION.md).
@@ -37,6 +37,18 @@ upstream gauges.
 
 Calibration must end before assimilation begins; the periods may not overlap
 or touch.
+
+## Supported model configurations
+
+The public interactive workflow currently supports:
+
+- `sac-sma`
+- `snow17-sac-sma`
+
+The coupled `snow17-sac-sma` chain is Snow17 -> NoahOWP -> SAC-SMA. SAC-SMA
+remains the directly assimilated runoff-generation model. Snow17 and NoahOWP
+follow the same complete SIR particle ancestry as SAC-SMA so the coupled
+particle remains physically coherent after selection.
 
 ## Intended beginner workflow
 
@@ -84,7 +96,7 @@ upstream gauges. The downstream gauge remains assimilated.
 
 ## Scientific routing/assimilation contract
 
-For the current SAC-SMA release:
+For the current certified runoff-assimilation implementation:
 
 - raw USGS streamflow observations enter the localized serial routing EnSRF;
 - each serial routing analysis conditions the evolving qlat ensemble;
@@ -101,7 +113,9 @@ For the current SAC-SMA release:
   analysis cycle;
 - ESS is a diagnostic and is not a resampling on/off switch;
 - selected ancestry is applied coherently to the complete SAC-SMA state
-  vector, LIS/GMAO perturbation memory, and forcing lineage; and
+  vector, LIS/GMAO perturbation memory, and forcing lineage;
+- for `snow17-sac-sma`, the same ancestry is also applied to the complete
+  Snow17 and NoahOWP particle state; and
 - no process replay/rerun mechanism is part of the current architecture.
 
 ## Deterministic baseline
@@ -140,6 +154,7 @@ should not be presented as independent predictive skill.
 
 ## Reproducibility
 
-Preserve at least the NextGenDA Git revision, runtime image identity/digest,
+Preserve at least the NextGenDA Git revision, the runtime image identities/
+digests required by the selected model configuration,
 exact t-route revision, gauge configuration, calibration/warm-up/assimilation
 periods, perturbation configuration, random-seed policy, and runtime manifests.

@@ -24,11 +24,14 @@ separate `pip install` step is not required.
 The bootstrap installs the exact NGIAB preparation repositories and commits
 recorded in `configs/upstream_pins.json`.
 
-## NextGen / ngen and SAC-SMA
+## NextGen / ngen and hydrologic model components
 
-Users do not manually build ngen or SAC-SMA for the certified beginner
-workflow. Production model execution uses the immutable runtime recorded in
-`runtime/runtime-lock.json`.
+Users do not manually build ngen, SAC-SMA, Snow17, or NoahOWP for the certified
+beginner workflow. Production model execution uses the immutable runtime images
+recorded in `runtime/runtime-lock.json`.
+
+The current certified model configurations are `sac-sma` and
+`snow17-sac-sma` (Snow17 -> NoahOWP -> SAC-SMA).
 
 ## t-route
 

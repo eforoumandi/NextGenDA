@@ -6,7 +6,9 @@ NextGenDA adds a modular data-assimilation orchestration layer around the
 existing NextGen/ngen and t-route ecosystem without modifying upstream
 NextGen or t-route source code.
 
-The current SAC-SMA workflow combines:
+The current certified public workflows support both `sac-sma` and `snow17-sac-sma`.
+
+The SAC-SMA runoff-assimilation workflow combines:
 
 - ensemble meteorological forcing and SAC-SMA state uncertainty,
 - network-localized routing EnSRF,
@@ -14,6 +16,8 @@ The current SAC-SMA workflow combines:
 - covariance-aware reduced-rank density-ratio Block-SIR updates for SAC-SMA,
 - multigauge causal runoff-generation blocks,
 - coherent ancestry propagation through model states and stochastic memory.
+
+For `snow17-sac-sma`, SAC-SMA remains the directly assimilated runoff-generation model while complete particle ancestry is propagated coherently through the coupled Snow17 and NoahOWP states. This prevents hybrid particles after SIR selection and preserves the future coupled trajectory of the selected particle.
 
 ## Certified execution environment
 
@@ -56,7 +60,7 @@ the Linux Conda environment inside WSL2.
 
 - verifies that it is running on a supported Linux/WSL2 host;
 - checks out the exact pinned NGIAB preparation backends;
-- verifies and pulls the immutable certified GHCR runtime;
+- verifies and pulls the immutable certified GHCR runtime images required by the supported model workflows;
 - installs the exact pinned t-route source;
 - verifies all upstream Git identities and clean worktrees;
 - writes the local runtime environment configuration; and

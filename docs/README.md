@@ -1,7 +1,8 @@
 # NextGenDA Documentation
 
 This directory contains the current public and technical documentation for
-NextGenDA.
+NextGenDA. The current certified public model configurations are `sac-sma` and
+`snow17-sac-sma` (Snow17 -> NoahOWP -> SAC-SMA).
 
 ## Start here
 
