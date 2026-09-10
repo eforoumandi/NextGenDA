@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from netCDF4 import Dataset
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import (
     date,
     datetime,
@@ -1246,12 +1246,4 @@ def execute_with_assimilation_contract(
 
     return execute_transparent_run(
         **supplied
-    )
-
-
-def window_to_dict(
-    value: AssimilationRuntimeWindow,
-) -> dict[str, Any]:
-    return asdict(
-        value
     )

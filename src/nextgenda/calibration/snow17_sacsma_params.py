@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import (
-    asdict,
     dataclass,
 )
 
@@ -1200,13 +1199,4 @@ def apply_uniform_absolute_candidate(
         parameter_dimension=(
             JOINT_PARAMETER_DIMENSION
         ),
-    )
-
-
-def application_result_to_dict(
-    value: JointParameterApplicationResult,
-) -> dict[str, Any]:
-
-    return asdict(
-        value
     )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 
@@ -164,12 +164,4 @@ def resolve_observation_target(
             crosswalk,
             "vpuid",
         ),
-    )
-
-
-def observation_target_to_dict(
-    value: ObservationTarget,
-) -> dict[str, Any]:
-    return asdict(
-        value
     )

@@ -206,29 +206,6 @@ def discover_run_package_files(
 
 
 # -------------------------------------------------------------------------------------------------
-# REALIZATION INSPECTION
-# -------------------------------------------------------------------------------------------------
-
-
-def realization_model(
-    path: Path,
-) -> str | None:
-    try:
-
-        adapter = (
-            detect_model_adapter_from_realization(
-                path
-            )
-        )
-
-    except ModelRegistryError:
-
-        return None
-
-    return adapter.name
-
-
-# -------------------------------------------------------------------------------------------------
 # HYDROFABRIC INSPECTION
 # -------------------------------------------------------------------------------------------------
 
