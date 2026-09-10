@@ -319,6 +319,45 @@ def _single_path(
     return unique[0]
 
 
+def _select_realization_path(
+    config_directory: Path,
+) -> Path:
+    """
+    Resolve the authoritative runtime realization.
+
+    Current NextGenDA coupled-model preparation deliberately preserves
+    NGIAB source-realization snapshots beside the composed runtime
+    realization:
+
+        realization.json
+        realization.ngiab-sacsma.json
+        realization.ngiab-snow17-cfe.json
+
+    The canonical NGIAB/NextGen runtime contract is config/realization.json.
+    Provenance snapshots must therefore not make runtime discovery ambiguous.
+
+    Legacy packages without the canonical path retain the historical strict
+    exactly-one discovery behavior.
+    """
+
+    canonical = (
+        config_directory
+        / "realization.json"
+    )
+
+    if canonical.is_file():
+        return canonical.resolve()
+
+    return _single_path(
+        tuple(
+            config_directory.rglob(
+                "*realization*.json"
+            )
+        ),
+        description="NGIAB realization JSON",
+    )
+
+
 def _strip_yaml_comment(value: str) -> str:
     in_single = False
     in_double = False
@@ -814,9 +853,8 @@ def discover_ngiab_run(
             f"NGIAB config directory does not exist: {config_directory}"
         )
 
-    realization_path = _single_path(
-        tuple(config_directory.rglob("*realization*.json")),
-        description="NGIAB realization JSON",
+    realization_path = _select_realization_path(
+        config_directory
     )
 
     try:
