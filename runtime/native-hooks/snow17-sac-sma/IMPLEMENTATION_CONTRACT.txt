@@ -1,0 +1,43 @@
+NextGenDA Snow17-SAC-SMA complete-particle ancestry native hook
+
+Native hook registry key:
+
+    NGIAB_DA_NATIVE_HOOK_MODEL=snow17-sac-sma
+
+Runoff particle-filter algorithm:
+
+    NGIAB_DA_RUNOFF_PF_MODEL=sacsma
+
+Scientific state contract:
+
+    SAC-SMA:
+        six prognostic storages are directly assimilated/resampled
+
+    Snow17:
+        not directly assimilated
+        complete prognostic state follows SIR particle ancestry
+
+    NoahOWP:
+        not directly assimilated
+        complete water + energy state follows SIR particle ancestry
+
+    Coupled ancestry schema:
+        snow17-noah-complete-state-v1
+
+Certified binary SHA256:
+    29dcbf9b3d6df47c98dea8899d97cae3c0e04962d41ccf5f33406a4a2a6875fa
+
+Certified source SHA256:
+    474df81ece49a092a694cb1236b2b9f195cc85a6393f6f90bcd6342176e97927
+
+Certified NextGenDA base commit:
+    469c89228c11fbf5bd37c65236fc2c5b18a68f7f
+
+Certified coupled member runtime image ID:
+    sha256:2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e
+
+Model physics modified:
+    NO
+
+DA parameters tuned for certification:
+    NO

@@ -491,3 +491,163 @@ def test_explicit_cfe_preserves_routing_qlat_hook(
         "/workspace/hook/build/"
         "libngiab_da_routing_qlat_socket_hook.so"
     ) in command
+
+
+
+# COUPLED_NATIVE_HOOK_PROMOTION_TESTS_V1
+def test_coupled_snow17_sacsma_separates_pf_hook_and_member_image(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    artifacts, sacsma = (
+        _resolve(
+            tmp_path,
+            monkeypatch,
+        )
+    )
+
+    del sacsma
+
+    repository = (
+        Path(
+            transparent_run.__file__
+        )
+        .resolve()
+        .parents[3]
+    )
+
+    packaged = (
+        repository
+        / "runtime"
+        / "native-hooks"
+        / "snow17-sac-sma"
+    ).resolve()
+
+    assert (
+        artifacts.runoff_hook_artifacts
+        is not None
+    )
+
+    assert (
+        artifacts.runoff_hook_libraries
+        is not None
+    )
+
+    assert (
+        artifacts.runoff_hook_artifacts[
+            "snow17-sac-sma"
+        ]
+        == packaged
+    )
+
+    assert (
+        artifacts.runoff_hook_libraries[
+            "snow17-sac-sma"
+        ]
+        == (
+            packaged
+            / "build"
+            / (
+                "libngiab_da_"
+                "snow17_sac_sma"
+                "_ensemble_socket_hook.so"
+            )
+        )
+    )
+
+    monkeypatch.setenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        "sacsma",
+    )
+
+    monkeypatch.setenv(
+        "NGIAB_DA_NATIVE_HOOK_MODEL",
+        "snow17-sac-sma",
+    )
+
+    monkeypatch.setenv(
+        "NGIAB_DA_MEMBER_RUNTIME_IMAGE",
+        "test-coupled-member-image",
+    )
+
+    monkeypatch.delenv(
+        "NGIAB_DA_SACSMA_ACCEPTANCE_HOOK_ROOT",
+        raising=False,
+    )
+
+    command = _capture_member_command(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        artifacts=artifacts,
+    )
+
+    text = " ".join(
+        command
+    )
+
+    assert str(
+        packaged
+    ) in text
+
+    assert (
+        "NGIAB_DA_STEP_HOOK_LIBRARY="
+        "/workspace/hook/build/"
+        "libngiab_da_snow17_sac_sma"
+        "_ensemble_socket_hook.so"
+    ) in command
+
+    assert (
+        "test-coupled-member-image"
+        in command
+    )
+
+    #
+    # The PF algorithm identity is still SAC-SMA; only the native
+    # state-transfer hook identity is coupled.
+    #
+    assert (
+        "libngiab_da_sacsma_ensemble_socket_hook.so"
+        not in text
+    )
+
+
+def test_unknown_native_hook_model_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    artifacts, _sacsma = (
+        _resolve(
+            tmp_path,
+            monkeypatch,
+        )
+    )
+
+    monkeypatch.setenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        "sacsma",
+    )
+
+    monkeypatch.setenv(
+        "NGIAB_DA_NATIVE_HOOK_MODEL",
+        "not-certified-coupled-model",
+    )
+
+    monkeypatch.delenv(
+        "NGIAB_DA_SACSMA_ACCEPTANCE_HOOK_ROOT",
+        raising=False,
+    )
+
+    with pytest.raises(
+        transparent_run.TransparentRunError,
+        match=(
+            "requires a validated model-specific "
+            "native state-access hook artifact"
+        ),
+    ):
+        _capture_member_command(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+            artifacts=artifacts,
+        )

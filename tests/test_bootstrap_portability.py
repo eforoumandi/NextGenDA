@@ -601,3 +601,239 @@ def test_setup_troute_host_gate_precedes_clone():
         <
         main_source.index('"clone"')
     )
+
+
+
+# COUPLED_RUNTIME_FINAL_PORTABILITY_V1
+def test_runtime_lock_contains_certified_coupled_member_image():
+    payload = json.loads(
+        (
+            ROOT
+            / "runtime"
+            / "runtime-lock.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    coupled = payload[
+        "coupled_member_container"
+    ]
+
+    assert (
+        coupled[
+            "distribution_status"
+        ]
+        == "PUBLIC_GHCR_VERIFIED"
+    )
+
+    assert (
+        coupled[
+            "anonymous_access_verified"
+        ]
+        is True
+    )
+
+    assert (
+        coupled[
+            "model_physics_modified"
+        ]
+        is False
+    )
+
+    assert (
+        coupled[
+            "registry_manifest_digest"
+        ]
+        ==
+        "sha256:2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e"
+    )
+
+    assert (
+        coupled[
+            "immutable_registry_reference"
+        ]
+        ==
+        (
+            "ghcr.io/eforoumandi/"
+            "nextgenda-runtime:"
+            "snow17-sac-sma-state-access-rc1"
+            "@sha256:"
+            "2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e"
+        )
+    )
+
+
+def test_coupled_runtime_component_identity_contract():
+    payload = json.loads(
+        (
+            ROOT
+            / "runtime"
+            / "runtime-lock.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    coupled = payload[
+        "coupled_member_container"
+    ]
+
+    snow = coupled[
+        "snow17"
+    ]
+
+    noah = coupled[
+        "noah_owp_modular"
+    ]
+
+    sac = coupled[
+        "sac_sma"
+    ]
+
+
+    assert (
+        snow[
+            "runtime_library_path"
+        ]
+        == "/dmod/shared_libs/libsnow17bmi.so"
+    )
+
+    assert (
+        snow[
+            "runtime_library_sha256"
+        ]
+        ==
+        "3ccf3efa727f8a341beb651d3b37bb6fd1ef6353ede8355fbd8debd9c4ddacd4"
+    )
+
+
+    assert (
+        noah[
+            "runtime_library_path"
+        ]
+        == "/dmod/shared_libs/libsurfacebmi.so"
+    )
+
+    assert (
+        noah[
+            "runtime_library_sha256"
+        ]
+        ==
+        "9c89f7d1d8e7532c6a1339e8bc62c119b80b7e43b37190ba0bb2de6e24ff530a"
+    )
+
+    assert (
+        noah[
+            "license_classification"
+        ]
+        == "US_GOVERNMENT_CUSTOM_NOTICE"
+    )
+
+
+    assert (
+        sac[
+            "runtime_library_path"
+        ]
+        == "/dmod/shared_libs/libsacbmi.so"
+    )
+
+    assert (
+        sac[
+            "runtime_library_sha256"
+        ]
+        ==
+        "6dee5b4d16ae03522194dbcc155b0e8cd62eacbcd53c3316ad14525df757d3b5"
+    )
+
+
+def test_runtime_setup_discovers_both_certified_images():
+    runtime = load_script(
+        "setup_runtime.py"
+    )
+
+    payload = json.loads(
+        (
+            ROOT
+            / "runtime"
+            / "runtime-lock.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    entries = runtime._runtime_container_entries(
+        payload
+    )
+
+    assert tuple(
+        key
+        for key, _record
+        in entries
+    ) == (
+        "production_container",
+        "coupled_member_container",
+    )
+
+
+def test_release_models_are_explicit():
+    payload = json.loads(
+        (
+            ROOT
+            / "runtime"
+            / "runtime-lock.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert payload[
+        "release_models"
+    ] == [
+        "sac-sma",
+        "snow17-sac-sma",
+    ]
+
+
+def test_coupled_model_legal_files_exist():
+    required = (
+        "snow17-LICENSE",
+        "snow17-TERMS.md",
+        "noah-owp-modular-LICENSE",
+        "noah-owp-modular-TERMS.md",
+    )
+
+    for filename in required:
+
+        candidate = (
+            ROOT
+            / "THIRD_PARTY_LICENSES"
+            / filename
+        )
+
+        assert candidate.is_file()
+        assert candidate.stat().st_size > 0
+
+
+def test_noah_notice_uses_actual_runtime_library_name():
+    notice = (
+        ROOT
+        / "THIRD_PARTY_NOTICES.md"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "/dmod/shared_libs/libsurfacebmi.so"
+        in notice
+    )
+
+    assert (
+        "U.S. Government"
+        in notice
+    )
+
+    assert (
+        "Department of Commerce"
+        in notice
+    )

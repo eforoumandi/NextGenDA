@@ -279,173 +279,151 @@ def _parse_repo_digests(
     return values
 
 
-def main() -> int:
+def _runtime_container_entries(
+    lock: dict,
+) -> tuple[tuple[str, dict], ...]:
 
-    heading(
-        "NEXTGENDA CERTIFIED RUNTIME SETUP"
-    )
+    names = [
+        "production_container",
+    ]
 
-    if not LOCK.is_file():
-
-        raise SystemExit(
-            "ERROR: runtime lockfile missing: "
-            f"{LOCK}"
+    if (
+        "coupled_member_container"
+        in lock
+    ):
+        names.append(
+            "coupled_member_container"
         )
 
-    lock = json.loads(
-        LOCK.read_text(
-            encoding="utf-8"
+    result = []
+
+    for name in names:
+
+        value = lock.get(
+            name
         )
-    )
 
-    production = (
-        lock[
-            "production_container"
-        ]
-    )
+        if not isinstance(
+            value,
+            dict,
+        ):
+            raise SystemExit(
+                "ERROR: invalid runtime container "
+                f"entry {name!r}."
+            )
 
-    immutable = production.get(
-        "immutable_registry_reference"
-    )
-
-    expected_manifest_digest = (
-        production.get(
-            "registry_manifest_digest"
+        result.append(
+            (
+                name,
+                value,
+            )
         )
+
+    return tuple(
+        result
     )
 
-    compatibility_tag = production.get(
-        "certified_local_tag"
-    )
 
-    platforms = lock.get(
-        "supported_container_platforms",
-        [],
-    )
+def _install_certified_container(
+    *,
+    docker: str,
+    current_platform: str,
+    supported_platforms: list[str],
+    label: str,
+    record: dict,
+) -> tuple[str, str]:
+
+    immutable = str(
+        record.get(
+            "immutable_registry_reference",
+            "",
+        )
+    ).strip()
+
+    digest = str(
+        record.get(
+            "registry_manifest_digest",
+            "",
+        )
+    ).strip()
+
+    local_tag = str(
+        record.get(
+            "certified_local_tag",
+            "",
+        )
+    ).strip()
+
+    platform = str(
+        record.get(
+            "platform",
+            "",
+        )
+    ).strip().lower()
+
 
     if not immutable:
-
         raise SystemExit(
-            "ERROR: immutable runtime reference "
-            "is not configured."
+            f"ERROR: {label} has no immutable registry reference."
         )
 
-    if not expected_manifest_digest:
-
+    if not digest:
         raise SystemExit(
-            "ERROR: certified registry manifest "
-            "digest is missing."
+            f"ERROR: {label} has no registry digest."
         )
 
-    if not compatibility_tag:
-
+    if not local_tag:
         raise SystemExit(
-            "ERROR: compatibility runtime tag "
-            "is missing."
+            f"ERROR: {label} has no certified local tag."
         )
 
     if "@" not in immutable:
-
         raise SystemExit(
-            "ERROR: immutable runtime reference "
-            "is not digest-pinned."
+            f"ERROR: {label} runtime is not digest pinned."
         )
 
-    reference_digest = (
+    if (
         immutable.rsplit(
             "@",
             1,
         )[1]
-    )
+        != digest
+    ):
+        raise SystemExit(
+            f"ERROR: {label} digest/reference mismatch."
+        )
+
+    if not platform:
+        raise SystemExit(
+            f"ERROR: {label} has no certified platform."
+        )
 
     if (
-        reference_digest
-        != expected_manifest_digest
+        supported_platforms
+        and platform
+        not in supported_platforms
     ):
-
         raise SystemExit(
-            "ERROR: runtime lock contains "
-            "inconsistent registry digests."
+            f"ERROR: unsupported certified platform "
+            f"for {label}: {platform!r}."
         )
+
+    if platform != current_platform:
+        raise SystemExit(
+            f"ERROR: Docker engine platform "
+            f"{current_platform!r} differs from "
+            f"{label} certified platform {platform!r}."
+        )
+
 
     heading(
-        "1. HOST"
-    )
-
-    print(
-        "Python host: "
-        f"{_host_description()}"
-    )
-
-    heading(
-        "2. DOCKER"
-    )
-
-    docker = shutil.which(
-        "docker"
-    )
-
-    if docker is None:
-
-        raise SystemExit(
-            "ERROR: Docker is not installed.\n"
-            "Install/start Docker Desktop or Docker Engine first."
-        )
-
-    version = run(
-        [
-            docker,
-            "--version",
-        ],
-        capture=True,
-    )
-
-    if version.returncode != 0:
-
-        raise SystemExit(
-            "ERROR: Docker command is unavailable."
-        )
-
-    print(
-        version.stdout.strip()
-    )
-
-    current_platform = (
-        _docker_platform(
-            docker
-        )
-    )
-
-    print(
-        "Docker engine platform: "
-        f"{current_platform}"
-    )
-
-    if (
-        platforms
-        and current_platform
-        not in platforms
-    ):
-
-        raise SystemExit(
-            "ERROR: this release is certified only for: "
-            + ", ".join(
-                platforms
-            )
-        )
-
-    print(
-        "[OK] Docker daemon and platform supported."
-    )
-
-    heading(
-        "3. CERTIFIED IMAGE"
+        f"CERTIFIED IMAGE — {label}"
     )
 
     expected_repo_digest = (
         _expected_repo_digest(
             immutable,
-            expected_manifest_digest,
+            digest,
         )
     )
 
@@ -454,55 +432,38 @@ def main() -> int:
     )
 
     print(
-        "Pinned registry digest:\n"
-        f"  {expected_manifest_digest}"
+        f"Pinned registry digest:\n  {digest}"
     )
 
     print(
-        "Expected local RepoDigest:\n"
-        f"  {expected_repo_digest}"
+        f"Expected local RepoDigest:\n  "
+        f"{expected_repo_digest}"
     )
 
-    print(
-        "[OK] Immutable digest lock is internally consistent."
-    )
-
-    heading(
-        "4. PULL CERTIFIED RUNTIME"
-    )
 
     pull = run(
         [
             docker,
             "pull",
             "--platform",
-            current_platform,
+            platform,
             immutable,
         ],
         capture=True,
     )
 
     if pull.stdout:
-
         print(
             pull.stdout.rstrip()
         )
 
     if pull.returncode != 0:
-
         raise SystemExit(
-            "ERROR: digest-pinned Docker pull failed."
+            f"ERROR: pull failed for {label}."
         )
 
-    print(
-        "[OK] Digest-pinned runtime pull succeeded."
-    )
 
-    heading(
-        "5. VERIFY PINNED REGISTRY IDENTITY"
-    )
-
-    repo_digest_result = run(
+    digest_result = run(
         [
             docker,
             "image",
@@ -514,55 +475,25 @@ def main() -> int:
         capture=True,
     )
 
-    if repo_digest_result.returncode != 0:
-
+    if digest_result.returncode != 0:
         raise SystemExit(
-            "ERROR: pulled image could not be inspected.\n"
-            + repo_digest_result.stdout
+            f"ERROR: RepoDigest inspection failed for {label}."
         )
+
 
     repo_digests = (
         _parse_repo_digests(
-            repo_digest_result.stdout.strip()
+            digest_result.stdout.strip()
         )
     )
 
-    print(
-        "Local RepoDigests:"
-    )
 
-    if repo_digests:
-
-        for value in repo_digests:
-
-            print(
-                f"  {value}"
-            )
-
-    else:
-
-        print(
-            "  <none>"
-        )
-
-    if (
-        expected_repo_digest
-        not in repo_digests
-    ):
-
+    if expected_repo_digest not in repo_digests:
         raise SystemExit(
-            "ERROR: local Docker image does not record "
-            "the exact certified registry RepoDigest.\n"
-            f"Expected: {expected_repo_digest}"
+            f"ERROR: exact certified RepoDigest "
+            f"is missing for {label}."
         )
 
-    print(
-        "[OK] Exact certified registry RepoDigest verified."
-    )
-
-    heading(
-        "6. VERIFY LOCAL PLATFORM"
-    )
 
     platform_result = run(
         [
@@ -577,42 +508,23 @@ def main() -> int:
     )
 
     if platform_result.returncode != 0:
-
         raise SystemExit(
-            "ERROR: local image platform could not be inspected.\n"
-            + platform_result.stdout
+            f"ERROR: platform inspection failed for {label}."
         )
 
-    local_platform = (
+
+    actual_platform = (
         platform_result.stdout
         .strip()
         .lower()
     )
 
-    print(
-        "Expected platform: "
-        f"{current_platform}"
-    )
 
-    print(
-        "Actual platform:   "
-        f"{local_platform}"
-    )
-
-    if local_platform != current_platform:
-
+    if actual_platform != platform:
         raise SystemExit(
-            "ERROR: pulled runtime platform differs "
-            "from the certified Docker engine platform."
+            f"ERROR: runtime platform mismatch for {label}."
         )
 
-    print(
-        "[OK] Local runtime platform verified."
-    )
-
-    heading(
-        "7. CREATE NEXTGENDA COMPATIBILITY TAG"
-    )
 
     source_id_result = run(
         [
@@ -627,106 +539,203 @@ def main() -> int:
     )
 
     if source_id_result.returncode != 0:
-
         raise SystemExit(
-            "ERROR: local certified image ID could not be inspected."
+            f"ERROR: image-ID inspection failed for {label}."
         )
 
     source_id = (
-        source_id_result.stdout
-        .strip()
+        source_id_result.stdout.strip()
     )
 
-    tag = run(
+
+    tag_result = run(
         [
             docker,
             "tag",
             immutable,
-            compatibility_tag,
+            local_tag,
         ]
     )
 
-    if tag.returncode != 0:
-
+    if tag_result.returncode != 0:
         raise SystemExit(
-            "ERROR: compatibility tag creation failed."
+            f"ERROR: local tag creation failed for {label}."
         )
 
-    verify = run(
+
+    local_result = run(
         [
             docker,
             "image",
             "inspect",
             "--format",
             "{{.Id}}",
-            compatibility_tag,
+            local_tag,
         ],
         capture=True,
     )
 
-    if verify.returncode != 0:
-
+    if local_result.returncode != 0:
         raise SystemExit(
-            "ERROR: compatibility tag verification failed."
+            f"ERROR: local tag verification failed for {label}."
         )
 
-    tagged_id = (
-        verify.stdout
-        .strip()
+
+    local_id = (
+        local_result.stdout.strip()
     )
 
-    print(
-        "Certified local image ID: "
-        f"{source_id}"
-    )
 
-    print(
-        "Compatibility-tag image ID: "
-        f"{tagged_id}"
-    )
-
-    if tagged_id != source_id:
-
+    if local_id != source_id:
         raise SystemExit(
-            "ERROR: compatibility tag does not reference "
-            "the pulled certified runtime image."
+            f"ERROR: local tag identity mismatch for {label}."
+        )
+
+
+    print(
+        f"[OK] {local_tag} -> {local_id}"
+    )
+
+
+    return (
+        local_tag,
+        local_id,
+    )
+
+
+def main() -> int:
+
+    heading(
+        "NEXTGENDA CERTIFIED RUNTIME SETUP"
+    )
+
+    if not LOCK.is_file():
+        raise SystemExit(
+            "ERROR: runtime lockfile missing: "
+            f"{LOCK}"
+        )
+
+    lock = json.loads(
+        LOCK.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    supported_platforms = lock.get(
+        "supported_container_platforms",
+        [],
+    )
+
+    entries = (
+        _runtime_container_entries(
+            lock
+        )
+    )
+
+
+    heading(
+        "1. HOST"
+    )
+
+    print(
+        "Python host: "
+        f"{_host_description()}"
+    )
+
+
+    heading(
+        "2. DOCKER"
+    )
+
+    docker = shutil.which(
+        "docker"
+    )
+
+    if docker is None:
+        raise SystemExit(
+            "ERROR: Docker is not installed."
+        )
+
+
+    version = run(
+        [
+            docker,
+            "--version",
+        ],
+        capture=True,
+    )
+
+    if version.returncode != 0:
+        raise SystemExit(
+            "ERROR: Docker command is unavailable."
         )
 
     print(
-        f"[OK] {compatibility_tag}"
+        version.stdout.strip()
     )
+
+
+    current_platform = (
+        _docker_platform(
+            docker
+        )
+    )
+
+    print(
+        "Docker engine platform: "
+        f"{current_platform}"
+    )
+
+
+    if (
+        supported_platforms
+        and current_platform
+        not in supported_platforms
+    ):
+        raise SystemExit(
+            "ERROR: this release is certified only for: "
+            + ", ".join(
+                supported_platforms
+            )
+        )
+
+
+    installed = []
+
+
+    for label, record in entries:
+
+        installed.append(
+            _install_certified_container(
+                docker=docker,
+                current_platform=current_platform,
+                supported_platforms=(
+                    supported_platforms
+                ),
+                label=label,
+                record=record,
+            )
+        )
+
 
     heading(
         "RUNTIME SETUP COMPLETE"
     )
 
     print(
-        "The certified NextGenDA SAC-SMA runtime is installed."
+        "All certified NextGenDA runtime images are installed."
     )
 
     print(
-        "Verified identity chain:"
+        f"Certified image count: {len(installed)}"
     )
 
-    print(
-        "  immutable digest reference"
-    )
+    for tag, image_id in installed:
 
-    print(
-        "  -> successful digest-pinned pull"
-    )
+        print(
+            f"  {tag} -> {image_id}"
+        )
 
-    print(
-        "  -> exact local RepoDigest"
-    )
-
-    print(
-        "  -> certified local platform"
-    )
-
-    print(
-        "  -> compatibility tag with identical local image ID"
-    )
 
     return 0
 

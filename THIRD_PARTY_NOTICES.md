@@ -53,3 +53,68 @@ is preserved in:
 
 These third-party notices do not determine the license of NextGenDA itself.
 NextGenDA's own project-level license is a separate release decision.
+
+
+<!-- NEXTGENDA_COUPLED_RUNTIME_NOTICE_V2 -->
+
+## Snow17
+
+Upstream project:
+
+https://github.com/NOAA-OWP/snow17
+
+Pinned source commit:
+
+`3a883f90049a86e05c7014910b6e34136b866d60`
+
+License classification: Apache License 2.0.
+
+The coupled NextGenDA member runtime contains a Snow17 BMI library
+built from an isolated copy of the pinned source with narrowly scoped
+BMI state-access exposure required for complete particle ancestry.
+The authoritative pinned upstream checkout was not modified.
+
+Preserved upstream legal files:
+
+`THIRD_PARTY_LICENSES/snow17-LICENSE`
+
+`THIRD_PARTY_LICENSES/snow17-TERMS.md`
+
+
+## Noah-OWP-Modular
+
+Upstream project:
+
+https://github.com/NOAA-OWP/noah-owp-modular
+
+Pinned source commit:
+
+`0abb891b48b043cc626c4e4bbd0efe54ad357fe1`
+
+License classification: U.S. Government / Department of Commerce
+custom software notice.
+
+The pinned upstream LICENSE states that software code created by
+U.S. Government employees is not subject to copyright in the
+United States under 17 U.S.C. §105 and includes the Department of
+Commerce terms governing use, copying, and derivative works outside
+the United States.
+
+The coupled NextGenDA member runtime contains the certified
+Noah-OWP-Modular BMI library at:
+
+`/dmod/shared_libs/libsurfacebmi.so`
+
+It was built from an isolated copy of the pinned source with narrowly
+scoped complete water-state and energy-state BMI exposure required
+for complete particle ancestry. The authoritative pinned upstream
+checkout was not modified.
+
+Preserved upstream legal files:
+
+`THIRD_PARTY_LICENSES/noah-owp-modular-LICENSE`
+
+`THIRD_PARTY_LICENSES/noah-owp-modular-TERMS.md`
+
+The NOAA/DOC disclaimer and non-endorsement terms in the upstream
+`TERMS.md` are retained and apply as provided by the upstream project.

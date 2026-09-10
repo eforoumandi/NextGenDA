@@ -473,3 +473,70 @@ def test_canonical_active_realization_overrides_provenance_snapshots(
         detected.name
         == "snow17-sac-sma"
     )
+
+
+
+# COUPLED_ASSIMILATION_PROMOTION_CONTRACT_V1
+def test_coupled_assimilation_runtime_contract_is_enabled():
+    adapter = resolve_model_adapter(
+        "snow17-sac-sma"
+    )
+
+    assert adapter.assimilation_supported is True
+    assert adapter.baseline_supported is True
+    assert adapter.calibration_supported is True
+
+    #
+    # Sidecar/runtime behavior for the historical SAC-SMA path
+    # stays unchanged.
+    #
+    assert adapter.default_runtime_image == (
+        "ngiab-da-runtime:"
+        "sacsma-state-access-20260810T231207Z"
+    )
+
+    environment = (
+        adapter.runtime_environment()
+    )
+
+    assert environment[
+        "NGIAB_DA_RUNOFF_PF_MODEL"
+    ] == "sacsma"
+
+    assert environment[
+        "NGIAB_DA_NATIVE_HOOK_MODEL"
+    ] == "snow17-sac-sma"
+
+    assert environment[
+        "NGIAB_DA_MEMBER_RUNTIME_IMAGE"
+    ] == (
+        "ngiab-da-runtime:"
+        "snow17-sac-sma-state-access-20260908T165351Z"
+    )
+
+
+def test_plain_sacsma_does_not_inherit_coupled_native_contract():
+    adapter = resolve_model_adapter(
+        "sac-sma"
+    )
+
+    environment = (
+        adapter.runtime_environment()
+    )
+
+    assert (
+        environment[
+            "NGIAB_DA_RUNOFF_PF_MODEL"
+        ]
+        == "sacsma"
+    )
+
+    assert (
+        "NGIAB_DA_NATIVE_HOOK_MODEL"
+        not in environment
+    )
+
+    assert (
+        "NGIAB_DA_MEMBER_RUNTIME_IMAGE"
+        not in environment
+    )

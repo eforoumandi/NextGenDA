@@ -1,4 +1,40 @@
 {
+  "coupled_member_container": {
+    "anonymous_access_verified": true,
+    "certified_local_tag": "ngiab-da-runtime:snow17-sac-sma-state-access-20260908T165351Z",
+    "distribution_status": "PUBLIC_GHCR_VERIFIED",
+    "immutable_registry_reference": "ghcr.io/eforoumandi/nextgenda-runtime:snow17-sac-sma-state-access-rc1@sha256:2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e",
+    "model_physics_modified": false,
+    "noah_owp_modular": {
+      "license_classification": "US_GOVERNMENT_CUSTOM_NOTICE",
+      "license_file": "THIRD_PARTY_LICENSES/noah-owp-modular-LICENSE",
+      "runtime_library_path": "/dmod/shared_libs/libsurfacebmi.so",
+      "runtime_library_sha256": "9c89f7d1d8e7532c6a1339e8bc62c119b80b7e43b37190ba0bb2de6e24ff530a",
+      "terms_file": "THIRD_PARTY_LICENSES/noah-owp-modular-TERMS.md",
+      "upstream_commit": "0abb891b48b043cc626c4e4bbd0efe54ad357fe1",
+      "upstream_repository": "https://github.com/NOAA-OWP/noah-owp-modular.git"
+    },
+    "platform": "linux/amd64",
+    "purpose": "Native NGen member runtime for Snow17 -> NoahOWP -> SAC-SMA complete-particle ancestry.",
+    "registry_manifest_digest": "sha256:2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e",
+    "registry_tag": "ghcr.io/eforoumandi/nextgenda-runtime:snow17-sac-sma-state-access-rc1",
+    "sac_sma": {
+      "runtime_library_path": "/dmod/shared_libs/libsacbmi.so",
+      "runtime_library_sha256": "6dee5b4d16ae03522194dbcc155b0e8cd62eacbcd53c3316ad14525df757d3b5",
+      "upstream_commit": "975902e3d44785f3b3503f29adfb5755120f5bf5",
+      "upstream_repository": "https://github.com/NOAA-OWP/sac-sma.git"
+    },
+    "snow17": {
+      "license_classification": "APACHE-2.0",
+      "license_file": "THIRD_PARTY_LICENSES/snow17-LICENSE",
+      "runtime_library_path": "/dmod/shared_libs/libsnow17bmi.so",
+      "runtime_library_sha256": "3ccf3efa727f8a341beb651d3b37bb6fd1ef6353ede8355fbd8debd9c4ddacd4",
+      "terms_file": "THIRD_PARTY_LICENSES/snow17-TERMS.md",
+      "upstream_commit": "3a883f90049a86e05c7014910b6e34136b866d60",
+      "upstream_repository": "https://github.com/NOAA-OWP/snow17.git"
+    },
+    "state_access_strategy": "Isolated copies of pinned model sources with narrowly scoped BMI state-access exposure; authoritative upstream checkouts retained unchanged."
+  },
   "generic_fallback_container": {
     "local_tag": "ngiab-da-runtime:troute-baseline-dd43a7d",
     "required_for_normal_sac_sma_user_install": false
@@ -29,6 +65,10 @@
     "troute_builder_image_id": "sha256:a051f7475d7f3d93bd433d1976e0e4202d8381c0434ccd6b50b4575653e15358"
   },
   "release_model": "sac-sma",
+  "release_models": [
+    "sac-sma",
+    "snow17-sac-sma"
+  ],
   "release_policy": {
     "allow_unpinned_latest_tag": false,
     "automatic_runtime_setup_required": true,

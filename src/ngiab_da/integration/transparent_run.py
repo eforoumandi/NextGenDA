@@ -883,6 +883,139 @@ def resolve_derived_native_artifacts(
         ] = library
 
 
+    # REPOSITORY_PACKAGED_NATIVE_HOOKS_V1
+    #
+    # Public NextGenDA distributions may carry an immutable,
+    # checksum-verified model-specific native hook artifact directly
+    # in runtime/native-hooks.  External certified artifacts remain
+    # authoritative when the same key is supplied through
+    # artifact_parent.
+    #
+    packaged_hook_root = (
+        _repository_root()
+        / "runtime"
+        / "native-hooks"
+    )
+
+    if packaged_hook_root.is_dir():
+
+        packaged_seen: set[str] = set()
+
+        for candidate in sorted(
+            path
+            for path in packaged_hook_root.iterdir()
+            if path.is_dir()
+        ):
+
+            contract_path = (
+                candidate
+                / "IMPLEMENTATION_CONTRACT.txt"
+            )
+
+            if not contract_path.is_file():
+                continue
+
+            contract_text = (
+                contract_path.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            feature_lines = [
+                line.strip()
+                for line
+                in contract_text.splitlines()
+                if line.strip().startswith(
+                    "NGIAB_DA_NATIVE_HOOK_MODEL="
+                )
+            ]
+
+            if not feature_lines:
+                continue
+
+            if len(feature_lines) != 1:
+                raise TransparentRunError(
+                    "Repository-packaged native hook declares "
+                    "multiple native model keys: "
+                    f"{candidate}"
+                )
+
+            model_key = (
+                feature_lines[0]
+                .split(
+                    "=",
+                    1,
+                )[1]
+                .strip()
+                .lower()
+            )
+
+            if (
+                not model_key
+                or re.fullmatch(
+                    r"[a-z0-9][a-z0-9_-]*",
+                    model_key,
+                ) is None
+            ):
+                raise TransparentRunError(
+                    "Repository-packaged native hook declares "
+                    "an invalid model key: "
+                    f"{model_key!r}."
+                )
+
+            if model_key in packaged_seen:
+                raise TransparentRunError(
+                    "Multiple repository-packaged native hooks "
+                    "declare the same model key: "
+                    f"{model_key!r}."
+                )
+
+            packaged_seen.add(
+                model_key
+            )
+
+            _verify_sha256_manifest(
+                candidate
+            )
+
+            library_name = (
+                "libngiab_da_"
+                f"{model_key.replace('-', '_')}"
+                "_ensemble_socket_hook.so"
+            )
+
+            library = (
+                candidate
+                / "build"
+                / library_name
+            )
+
+            if not library.is_file():
+                raise TransparentRunError(
+                    "Repository-packaged native hook does not "
+                    "contain its expected library: "
+                    f"model={model_key!r}; "
+                    f"library={library}."
+                )
+
+            #
+            # Explicit external validated artifacts win when present.
+            # Otherwise the repository-packaged immutable artifact is
+            # the production fallback.
+            #
+            if (
+                model_key
+                not in runoff_hook_artifacts
+            ):
+                runoff_hook_artifacts[
+                    model_key
+                ] = candidate.resolve()
+
+                runoff_hook_libraries[
+                    model_key
+                ] = library.resolve()
+
+
     t_route = Path(
         t_route_source
         or os.environ.get("NGIAB_DA_TROUTE_SOURCE")
@@ -1958,6 +2091,22 @@ def _launch_member(
         or ""
     )
 
+    native_hook_model = (
+        _declared_native_hook_model_key(
+            runoff_pf_model_key=(
+                runoff_pf_model
+                or None
+            ),
+        )
+        or ""
+    )
+
+    member_runtime_image = (
+        _member_runtime_image(
+            artifacts.runtime_image
+        )
+    )
+
     backend_capability = (
         executed_capability
     )
@@ -2006,13 +2155,13 @@ def _launch_member(
 
             hook_artifact_value = (
                 runoff_hook_artifacts.get(
-                    runoff_pf_model
+                    native_hook_model
                 )
             )
 
             hook_library_value = (
                 runoff_hook_libraries.get(
-                    runoff_pf_model
+                    native_hook_model
                 )
             )
 
@@ -2029,7 +2178,8 @@ def _launch_member(
                     "model "
                     f"{runoff_pf_model!r} requires a validated "
                     "model-specific native state-access hook "
-                    "artifact."
+                    "artifact for native hook key "
+                    f"{native_hook_model!r}."
                 )
 
             hook_artifact = Path(
@@ -2042,7 +2192,7 @@ def _launch_member(
 
             expected_hook_filename = (
                 "libngiab_da_"
-                f"{runoff_pf_model.replace('-', '_')}"
+                f"{native_hook_model.replace('-', '_')}"
                 "_ensemble_socket_hook.so"
             )
 
@@ -2053,7 +2203,7 @@ def _launch_member(
                 raise TransparentRunError(
                     "Resolved runoff native-hook library has "
                     "an unexpected filename: "
-                    f"model={runoff_pf_model!r}; "
+                    f"model={native_hook_model!r}; "
                     f"expected={expected_hook_filename!r}; "
                     f"actual={hook_filename!r}."
                 )
@@ -2186,7 +2336,7 @@ def _launch_member(
         root_target,
         "--entrypoint",
         "/workspace/base/build/ngen",
-        artifacts.runtime_image,
+        member_runtime_image,
         hydrofabric,
         "all",
         hydrofabric,
@@ -2349,6 +2499,81 @@ def _declared_runoff_pf_model_key(
         if value
         else None
     )
+
+
+def _declared_native_hook_model_key(
+    *,
+    runoff_pf_model_key: str | None,
+) -> str | None:
+    """
+    Resolve the native state-transfer hook independently from the
+    runoff particle-filter algorithm.
+
+    Most runoff models use the same key for both contracts.  Coupled
+    physical configurations may reuse an existing runoff PF algorithm
+    while requiring a different complete-particle state-access hook.
+    """
+
+    explicit = os.environ.get(
+        "NGIAB_DA_NATIVE_HOOK_MODEL",
+        "",
+    ).strip().lower()
+
+    value = (
+        explicit
+        if explicit
+        else str(
+            runoff_pf_model_key
+            or ""
+        ).strip().lower()
+    )
+
+    if not value:
+        return None
+
+    if re.fullmatch(
+        r"[a-z0-9][a-z0-9_-]*",
+        value,
+    ) is None:
+        raise TransparentRunError(
+            "Native hook model key contains invalid characters: "
+            f"{value!r}."
+        )
+
+    return value
+
+
+def _member_runtime_image(
+    default_runtime_image: str,
+) -> str:
+    """
+    Return the runtime image used by native NGen ensemble members.
+
+    The t-route/Python sidecar may retain the validated generic runtime
+    while a coupled hydrologic model uses a model-specific state-access
+    image.  Without an override the historical one-image behavior is
+    unchanged.
+    """
+
+    explicit = os.environ.get(
+        "NGIAB_DA_MEMBER_RUNTIME_IMAGE",
+        "",
+    ).strip()
+
+    value = (
+        explicit
+        if explicit
+        else str(
+            default_runtime_image
+        ).strip()
+    )
+
+    if not value:
+        raise TransparentRunError(
+            "Native member runtime image must not be empty."
+        )
+
+    return value
 
 
 def _model_neutral_capability(
@@ -3345,7 +3570,11 @@ def execute_transparent_run(
     _apply_noah_runtime_compatibility_to_runtime_copies(
         repository=repository,
         workspace=plan.workspace,
-        runtime_image=artifacts.runtime_image,
+        runtime_image=(
+            _member_runtime_image(
+                artifacts.runtime_image
+            )
+        ),
         runtime_roots=(
             control_run,
             *member_roots,

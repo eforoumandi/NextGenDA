@@ -15,6 +15,12 @@ import threading
 import time
 from typing import Any, Callable, Mapping, Sequence
 
+from ngiab_da.integration.ancestry_payload import (
+    ANCESTRY_PAYLOAD_KEY,
+    AncestryPayloadError,
+    normalize_ancestry_payload,
+)
+
 
 PROTOCOL_VERSION = 1
 _FRAME_HEADER = struct.Struct("!Q")
@@ -297,6 +303,27 @@ def _validate_sacsma_member_request(
                 state_name,
                 minimum=0.0,
             )
+
+        if ANCESTRY_PAYLOAD_KEY in raw_state:
+
+            try:
+
+                state[
+                    ANCESTRY_PAYLOAD_KEY
+                ] = normalize_ancestry_payload(
+                    raw_state[
+                        ANCESTRY_PAYLOAD_KEY
+                    ]
+                )
+
+            except AncestryPayloadError as error:
+
+                raise SequentialEnsembleProtocolError(
+                    "Invalid optional complete-ancestry payload "
+                    f"for catchment {state['catchment_id']!r}: "
+                    f"{error}"
+                ) from error
+
 
         key = (
             state[

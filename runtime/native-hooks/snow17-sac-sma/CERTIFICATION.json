@@ -1,0 +1,19 @@
+{
+  "certified_hook_sha256": "29dcbf9b3d6df47c98dea8899d97cae3c0e04962d41ccf5f33406a4a2a6875fa",
+  "certified_hook_source_sha256": "474df81ece49a092a694cb1236b2b9f195cc85a6393f6f90bcd6342176e97927",
+  "certified_member_runtime_image_id": "sha256:2824896225c1b2dd6eda386b665a1a30443c628d122ea5375f8a5f24c1db760e",
+  "complete_state_trajectory_equivalence": true,
+  "coupled_state_schema": "snow17-noah-complete-state-v1",
+  "da_parameter_tuning": false,
+  "model": "snow17-sac-sma",
+  "model_physics_changed": false,
+  "native_hook_model": "snow17-sac-sma",
+  "nextgenda_certification_base_commit": "469c89228c11fbf5bd37c65236fc2c5b18a68f7f",
+  "real_joint_ancestry_gate": true,
+  "real_nonidentity_ancestry_cycles": 69,
+  "real_nonidentity_whole_basin_transfers": 3657,
+  "real_observation_driven_gate": true,
+  "runoff_pf_model": "sacsma",
+  "schema_version": 1,
+  "successful_real_pf_cycles": 1925
+}

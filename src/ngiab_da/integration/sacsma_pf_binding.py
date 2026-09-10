@@ -28,6 +28,12 @@ from ngiab_da.filters.density_ratio import (
 
 from ngiab_da.integration.inplace_forcing_lineage import InplaceForcingLineageManager
 
+from ngiab_da.integration.ancestry_payload import (
+    ANCESTRY_PAYLOAD_KEY,
+    AncestryPayloadError,
+    ancestry_payload_signature,
+)
+
 from ngiab_da.coupling.dual_filter import RoutingPosteriorQlat
 from ngiab_da.engine.cycle import CycleWindow
 from ngiab_da.integration.runoff_pf_binding import (
@@ -595,6 +601,11 @@ class SidecarSACSMAPFBinding(
             | None
         ) = None
 
+        ancestry_payload_schema: (
+            tuple[Any, ...]
+            | None
+        ) = None
+
         rows: list[list[float]] = []
 
         for member_id, request in zip(
@@ -661,6 +672,10 @@ class SidecarSACSMAPFBinding(
 
             current_schema: list[
                 tuple[str, int]
+            ] = []
+
+            current_ancestry_payload_schema: list[
+                Any
             ] = []
 
             row: list[float] = []
@@ -738,6 +753,36 @@ class SidecarSACSMAPFBinding(
                     key
                 )
 
+                if (
+                    ANCESTRY_PAYLOAD_KEY
+                    in raw
+                ):
+
+                    try:
+
+                        payload_signature = (
+                            ancestry_payload_signature(
+                                raw[
+                                    ANCESTRY_PAYLOAD_KEY
+                                ]
+                            )
+                        )
+
+                    except AncestryPayloadError as error:
+
+                        raise SidecarSACSMAPFBindingError(
+                            "Optional complete-ancestry payload "
+                            f"is invalid for catchment {key[0]!r}."
+                        ) from error
+
+                else:
+
+                    payload_signature = None
+
+                current_ancestry_payload_schema.append(
+                    payload_signature
+                )
+
                 row.extend(
                     values
                 )
@@ -754,6 +799,26 @@ class SidecarSACSMAPFBinding(
 
                 raise SidecarSACSMAPFBindingError(
                     "SAC-SMA catchment-state schema/order "
+                    "differs by member."
+                )
+
+            current_payload_schema = tuple(
+                current_ancestry_payload_schema
+            )
+
+            if ancestry_payload_schema is None:
+
+                ancestry_payload_schema = (
+                    current_payload_schema
+                )
+
+            elif (
+                current_payload_schema
+                != ancestry_payload_schema
+            ):
+
+                raise SidecarSACSMAPFBindingError(
+                    "Complete-ancestry payload structure/order "
                     "differs by member."
                 )
 
@@ -789,7 +854,13 @@ class SidecarSACSMAPFBinding(
         str,
         tuple[dict[str, Any], ...],
     ]:
-        """Copy complete ancestor SAC state into stable target slots."""
+        """Copy complete ancestor catchment state into stable target slots.
+
+        The six SAC-SMA states drive the runoff filter.  If the synchronized
+        request also carries a validated opaque ancestry payload, that payload
+        follows the same complete particle ancestor through the existing
+        dictionary deepcopy operation.
+        """
 
         ancestor_values = np.asarray(
             ancestors,
@@ -862,11 +933,12 @@ class SidecarSACSMAPFBinding(
         str,
         tuple[dict[str, Any], ...],
     ]:
-        """Copy complete six-state ancestry independently by catchment.
+        """Copy complete catchment ancestry independently by catchment.
 
         The caller supplies a coherent basin-block ancestry matrix.
         This method performs no state interpolation: every affected
-        catchment receives all six states from one complete ancestor.
+        catchment receives all six SAC-SMA states and any validated opaque
+        ancestry payload from one and the same complete ancestor.
         """
 
         ids = tuple(
