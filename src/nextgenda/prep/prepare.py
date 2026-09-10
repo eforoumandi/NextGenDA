@@ -237,6 +237,47 @@ def _validate_date(
     )
 
 
+def _ensure_ngiab_control_parent() -> Path:
+    """
+    Ensure the pinned NGIAB Data Preprocess control-file parent exists.
+
+    NGIAB currently writes ``~/.ngiab/preprocessor`` when an explicit
+    ``--output_root`` is supplied, but the pinned backend does not create
+    the ``~/.ngiab`` parent before opening that file.
+
+    Creating the empty parent is an orchestration prerequisite only. It
+    does not create or reuse hydrofabric, forcing, parameter, model, or
+    data-assimilation artifacts.
+    """
+
+    parent = (
+        Path(
+            "~/.ngiab"
+        )
+        .expanduser()
+    )
+
+    try:
+        parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+    except OSError as exc:
+        raise PreparationError(
+            "Could not create the NGIAB control directory "
+            f"required for preprocessing: {parent}"
+        ) from exc
+
+    if not parent.is_dir():
+        raise PreparationError(
+            "The NGIAB control path exists but is not a "
+            f"directory: {parent}"
+        )
+
+    return parent
+
+
 def _default_name(
     *,
     selector_type: str,
@@ -1093,6 +1134,17 @@ def prepare_run_package(
                 additional_commands
             ),
         )
+
+    #
+    # Pinned NGIAB Data Preprocess writes its output-root control
+    # file to ~/.ngiab/preprocessor.  A genuinely clean HOME may not
+    # contain ~/.ngiab yet, and the pinned backend opens that control
+    # file before creating its parent.
+    #
+    # Keep dry-run side-effect-free; this guard is reached only for
+    # actual preparation execution.
+    #
+    _ensure_ngiab_control_parent()
 
     before = (
         _realization_paths(
