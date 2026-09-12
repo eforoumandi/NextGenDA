@@ -479,6 +479,7 @@ def _parse_datetime(value: str) -> datetime:
 def _realization_cycle_count(
     realization_path: Path,
 ) -> int:
+    """Return the number of completed output intervals in a realization."""
     payload = json.loads(realization_path.read_text(encoding="utf-8"))
     timing = payload.get("time")
     if not isinstance(timing, dict):
@@ -501,7 +502,12 @@ def _realization_cycle_count(
         raise TransparentRunError(
             "realization duration is not divisible by output_interval."
         )
-    return int(rounded) + 1
+
+    # Routing checkpoints represent completed model intervals, not
+    # timestamp nodes.  For example, a realization spanning 00:00 to
+    # 03:00 at an hourly output interval has three routing cycles:
+    # [00,01), [01,02), and [02,03).
+    return int(rounded)
 
 
 def _metadata_value(
