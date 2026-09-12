@@ -75,6 +75,7 @@ class TransparentRunPlan:
     cycle_count: int
     native_nudging_enabled: bool
     runoff_pf_model_key: str | None = None
+    runoff_pf_enabled: bool | None = None
 
 
 def _utc_run_id() -> str:
@@ -2736,12 +2737,35 @@ def _assimilation_architecture_payload(
         )
     )
 
+    #
+    # A registered runoff model means that a PF implementation/native
+    # hook exists; it does not mean the PF is enabled for this run.
+    #
+    # Preserve the actual model identity on the execution plan for
+    # native-hook selection, while preventing model-neutral capability
+    # provenance from advertising a disabled PF.
+    #
+    capability_runoff_pf_model_key = (
+        None
+
+        if (
+            getattr(
+                plan,
+                "runoff_pf_enabled",
+                None,
+            )
+            is False
+        )
+
+        else runoff_pf_model_key
+    )
+
     requested = (
         _model_neutral_capability(
             plan.requested_capability,
 
             runoff_pf_model_key=(
-                runoff_pf_model_key
+                capability_runoff_pf_model_key
             ),
         )
     )
@@ -2751,7 +2775,7 @@ def _assimilation_architecture_payload(
             plan.executed_capability,
 
             runoff_pf_model_key=(
-                runoff_pf_model_key
+                capability_runoff_pf_model_key
             ),
         )
     )
@@ -2795,6 +2819,13 @@ def _assimilation_architecture_payload(
 
         "capability_vocabulary":
             "model_neutral_v1",
+
+        "runoff_pf_enabled":
+            getattr(
+                plan,
+                "runoff_pf_enabled",
+                None,
+            ),
 
         "requested_capability":
             requested,
@@ -3489,6 +3520,20 @@ def execute_transparent_run(
         run_dir,
         run_id=run_id,
         ensemble_size=validated_ensemble_size,
+    )
+
+    #
+    # Runtime runoff-model identity and runtime PF enablement are
+    # independent controls.  Coupled models such as Snow17 + SAC-SMA
+    # retain their native state-access model key even when the runoff
+    # particle filter is explicitly disabled for a routing-only
+    # ablation.
+    #
+    plan = replace(
+        plan,
+        runoff_pf_enabled=(
+            resolved_runoff_pf_enabled
+        ),
     )
 
     if (

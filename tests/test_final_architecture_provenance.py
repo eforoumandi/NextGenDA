@@ -19,6 +19,7 @@ def _plan(
     requested: str = "routing_ensrf_only",
     resolved: str = "routing_ensrf_only",
     runoff_pf_model_key: str | None = None,
+    runoff_pf_enabled: bool | None = None,
 ) -> TransparentRunPlan:
 
     return TransparentRunPlan(
@@ -61,6 +62,10 @@ def _plan(
 
         runoff_pf_model_key=(
             runoff_pf_model_key
+        ),
+
+        runoff_pf_enabled=(
+            runoff_pf_enabled
         ),
     )
 
@@ -614,5 +619,217 @@ def test_no_da_status_remains_no_da(
         ]
         ==
         "no_da"
+    )
+
+
+def test_sacsma_explicit_pf_disable_preserves_model_identity_but_reports_routing_only(
+    tmp_path,
+    monkeypatch,
+):
+
+    monkeypatch.setenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        "sacsma",
+    )
+
+    plan = _plan(
+        tmp_path,
+        runoff_pf_model_key="sacsma",
+        runoff_pf_enabled=False,
+    )
+
+    #
+    # Runtime model identity must remain available for native
+    # state-access/native-hook resolution.
+    #
+    assert (
+        _declared_runoff_pf_model_key(
+            plan
+        )
+        ==
+        "sacsma"
+    )
+
+    payload = _status(
+        plan,
+        phase="running_routing_da",
+    )
+
+    assert (
+        payload[
+            "requested_capability"
+        ]
+        ==
+        "routing_ensrf_only"
+    )
+
+    assert (
+        payload[
+            "resolved_capability"
+        ]
+        ==
+        "routing_ensrf_only"
+    )
+
+    assert (
+        payload[
+            "executed_capability"
+        ]
+        ==
+        "routing_ensrf_only"
+    )
+
+    architecture = (
+        payload[
+            "assimilation_architecture"
+        ]
+    )
+
+    assert (
+        architecture[
+            "runoff_pf_enabled"
+        ]
+        is False
+    )
+
+    assert (
+        architecture[
+            "requested_components"
+        ]
+        ==
+        [
+            "routing_ensrf",
+        ]
+    )
+
+    assert (
+        architecture[
+            "resolved_components"
+        ]
+        ==
+        [
+            "routing_ensrf",
+        ]
+    )
+
+    assert (
+        architecture[
+            "executed_components"
+        ]
+        ==
+        [
+            "routing_ensrf",
+        ]
+    )
+
+    #
+    # Public architecture should not claim an executed runoff PF.
+    #
+    assert (
+        architecture[
+            "runoff_pf_model_key"
+        ]
+        is None
+    )
+
+    assert (
+        architecture[
+            "runoff_state_assimilation_method"
+        ]
+        is None
+    )
+
+    assert (
+        architecture[
+            "coupling_method"
+        ]
+        is None
+    )
+
+    assert (
+        architecture[
+            "routing_assimilation_method"
+        ]
+        ==
+        "ensrf"
+    )
+
+
+
+def test_sacsma_explicit_pf_enable_preserves_coupled_capability(
+    tmp_path,
+    monkeypatch,
+):
+
+    monkeypatch.setenv(
+        "NGIAB_DA_RUNOFF_PF_MODEL",
+        "sacsma",
+    )
+
+    plan = _plan(
+        tmp_path,
+        runoff_pf_model_key="sacsma",
+        runoff_pf_enabled=True,
+    )
+
+    payload = _status(
+        plan,
+        phase="running_routing_da",
+    )
+
+    architecture = (
+        payload[
+            "assimilation_architecture"
+        ]
+    )
+
+    assert (
+        architecture[
+            "runoff_pf_enabled"
+        ]
+        is True
+    )
+
+    assert (
+        payload[
+            "executed_capability"
+        ]
+        ==
+        "routing_ensrf_plus_runoff_pf"
+    )
+
+    assert (
+        architecture[
+            "executed_components"
+        ]
+        ==
+        [
+            "routing_ensrf",
+            "runoff_particle_filter",
+        ]
+    )
+
+    assert (
+        architecture[
+            "runoff_pf_model_key"
+        ]
+        ==
+        "sacsma"
+    )
+
+    assert (
+        architecture[
+            "runoff_state_assimilation_method"
+        ]
+        ==
+        "particle_filter"
+    )
+
+    assert (
+        architecture[
+            "coupling_method"
+        ]
+        ==
+        "routing_posterior_to_qlat_particle_filter"
     )
 
